@@ -6,8 +6,8 @@ import regex
 from collections import Counter
 from multiprocessing import Pool
 from cs336_basics.pretokenization_example import find_chunk_boundaries
-from bpe_utils import PAT, merge_tokens, diff_tokens, count_apperence
-from bpe_types import BpeToken, BpePair, SimplePair
+from cs336_basics.bpe_utils import PAT, merge_tokens, diff_tokens, count_apperence, split_special_tokens_training
+from cs336_basics.bpe_types import BpeToken, BpePair, SimplePair
 # %%
 
 
@@ -88,18 +88,10 @@ def update_bpe_pairs_dict(bpe_pairs_dict: dict[SimplePair, BpePair], target_bpe_
       bpe_pair.froms_.add(bpe_token)
 
 
-def split_tokens(data: str, special_tokens: list[str]):
-  tokens = Counter[str]()
-  for content in regex.splititer("|".join(regex.escape(token) for token in special_tokens), data):
-    for token in PAT.findall(content):
-      tokens[token] += 1
-  return tokens
-
-
 def get_tokens(input_path: str | os.PathLike, special_tokens: list[str]) -> Counter[str]:
   with open(input_path, "r", encoding="utf-8") as f:
     data = f.read()
-  tokens = split_tokens(data, special_tokens)
+  tokens = split_special_tokens_training(data, special_tokens)
   return tokens
 
 
@@ -107,7 +99,7 @@ def process_task(input_path: str, start: int, end: int, special_tokens: list[str
   with open(input_path, "rb") as f:
     f.seek(start)
     data = f.read(end - start).decode("utf-8", errors="ignore")
-  tokens = split_tokens(data, special_tokens)
+  tokens = split_special_tokens_training(data, special_tokens)
   return tokens
 
 
