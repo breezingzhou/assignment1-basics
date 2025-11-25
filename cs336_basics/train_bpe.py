@@ -4,6 +4,8 @@ from pathlib import Path
 import os
 import regex
 from collections import Counter
+from multiprocessing import Pool
+from cs336_basics.pretokenization_example import find_chunk_boundaries
 
 # %%
 PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
@@ -66,9 +68,9 @@ class BpePair:
     return f"BpePair({self.first!r}, {self.second!r}, count={self.count})\n  from_: {self.froms_}"
 
 
-def init_bpe_tokens(tokens: list[str]) -> list[BpeToken]:
+def init_bpe_tokens(tokens: Counter[str]) -> list[BpeToken]:
   bpe_tokens = []
-  for token, count in Counter(tokens).items():
+  for token, count in tokens.items():
     origin = token.encode("utf-8")
     byte_tokens = [origin[i:i + 1] for i in range(len(origin))]
     bpe_token = BpeToken(origin=origin, count=count, tokens=byte_tokens)
@@ -190,16 +192,43 @@ def update_bpe_pairs_dict(bpe_pairs_dict: dict[SimplePair, BpePair], target_bpe_
       bpe_pair.froms_.add(bpe_token)
 
 
-def get_tokens(input_path: str | os.PathLike, special_tokens: list[str]) -> list[str]:
-  tokens: list[str] = []
-  with open(input_path, "r", encoding="utf-8") as f:
-    data = f.read()
-
-  contents = regex.split("|".join(regex.escape(token) for token in special_tokens), data)
-  for content in contents:
-    tokens.extend(PAT.findall(content))
+def split_tokens(data: str, special_tokens: list[str]):
+  tokens = Counter[str]()
+  for content in regex.splititer("|".join(regex.escape(token) for token in special_tokens), data):
+    for token in PAT.findall(content):
+      tokens[token] += 1
   return tokens
 
+
+def get_tokens(input_path: str | os.PathLike, special_tokens: list[str]) -> Counter[str]:
+  with open(input_path, "r", encoding="utf-8") as f:
+    data = f.read()
+  tokens = split_tokens(data, special_tokens)
+  return tokens
+
+
+def process_task(input_path: str, start: int, end: int, special_tokens: list[str]) -> Counter[str]:
+  with open(input_path, "rb") as f:
+    f.seek(start)
+    data = f.read(end - start).decode("utf-8", errors="ignore")
+  tokens = split_tokens(data, special_tokens)
+  return tokens
+
+
+def get_tokens_v2(input_path: str | os.PathLike, special_tokens: list[str], split_special_token: bytes = b"<|endoftext|>", num_chunks: int = 16, num_processes: int = 8) -> Counter[str]:
+  with open(input_path, "rb") as f:
+    boundaries = find_chunk_boundaries(f, num_chunks, split_special_token)
+
+  args_list = [
+      (str(input_path), start, end, special_tokens) for start, end in zip(boundaries[:-1], boundaries[1:])
+  ]
+
+  with Pool(processes=num_processes) as pool:
+    results = pool.starmap(process_task, args_list)
+  total_tokens = Counter[str]()
+  for result in results:
+    total_tokens.update(result)
+  return total_tokens
 # %%
 
 
@@ -209,14 +238,22 @@ def train_bpe(
     special_tokens: list[str],
     **kwargs
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
-  vocab: dict[int, bytes] = {}
-  merges: list[tuple[bytes, bytes]] = []
+  num_chunks = kwargs.get("num_chunks")
+  num_processes = kwargs.get("num_processes")
+  split_special_token = kwargs.get("split_special_token", b"<|endoftext|>")
 
-  tokens = get_tokens(input_path, special_tokens)
+  if num_chunks and num_processes:
+    tokens = get_tokens_v2(input_path, special_tokens, split_special_token=split_special_token,
+                           num_chunks=num_chunks, num_processes=num_processes)
+  else:
+    tokens = get_tokens(input_path, special_tokens)
+
   bpe_tokens = init_bpe_tokens(tokens)
   bpe_pairs = init_bpe_pairs(bpe_tokens)
   bpe_pairs_dict = {bp.to_simple(): bp for bp in bpe_pairs}
 
+  vocab: dict[int, bytes] = {}
+  merges: list[tuple[bytes, bytes]] = []
   for i in range(len(special_tokens)):
     vocab[i] = special_tokens[i].encode("utf-8")
 
