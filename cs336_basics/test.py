@@ -78,3 +78,14 @@ decode_utf8_bytes_to_str_wrong(bytestring)
 #%%
 ord('中')
 chr(20013)
+# %%
+bytestring = b'\xb0\x80'
+bytestring.decode('utf-8')
+# %%
+import regex
+PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+PAT = regex.compile(PATTERN)
+
+for x in PAT.finditer("Hello, world! I'm Breezing. 1234 中国"):
+  print(x.group())
+PAT.findall("Hello, world! I'm Breezing. 1234 中国")
