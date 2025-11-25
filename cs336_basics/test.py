@@ -3,7 +3,7 @@
 from tests.common import gpt2_bytes_to_unicode
 import json
 from pathlib import Path
-from .train_bpe import train_bpe
+from train_bpe import train_bpe
 # %%
 
 
@@ -50,3 +50,22 @@ for index, (merge1, merge2) in enumerate(zip(merges_list, gpt2_reference_merges)
   if merge1 != merge2:
     print(f"Diff at index {index}: {merge1} != {merge2}")
     break
+# %%
+from train_bpe import (
+    get_tokens,
+    init_bpe_tokens,
+    init_bpe_pairs,
+    BpePair,
+    merge_tokens,
+    diff_tokens,
+    SimplePair
+)
+special_tokens=["<|endoftext|>"]
+tokens = get_tokens(input_path, special_tokens)
+
+bpe_tokens = init_bpe_tokens(tokens)
+bpe_pairs = init_bpe_pairs(bpe_tokens)
+bpe_pairs_dict = {bp.to_simple(): bp for bp in bpe_pairs}
+bpe_pair = bpe_pairs_dict.get(SimplePair(first=b'w', second=b'h'))
+assert bpe_pair is not None
+b" whether" in [from_.origin for from_ in bpe_pair.froms_]

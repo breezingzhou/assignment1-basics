@@ -36,7 +36,10 @@ class BpeToken:
   tokens: list[bytes]
 
   def __repr__(self) -> str:
-    return f"BpeToken({self.origin!r}, count={self.count})"
+    return f"BpeToken({self.origin!r}, count={self.count}, tokens={self.tokens})"
+
+  def __hash__(self) -> int:
+    return hash(self.origin)
 
 
 @dataclass
@@ -44,7 +47,7 @@ class BpePair:
   first: bytes
   second: bytes
   count: int
-  froms_: list[BpeToken]
+  froms_: set[BpeToken]
 
   def __lt__(self, other: "BpePair") -> bool:
     if self.count != other.count:
@@ -55,6 +58,9 @@ class BpePair:
 
   def to_pair(self) -> tuple[bytes, bytes]:
     return (self.first, self.second)
+
+  def to_simple(self) -> SimplePair:
+    return SimplePair(self.first, self.second)
 
   def __repr__(self) -> str:
     return f"BpePair({self.first!r}, {self.second!r}, count={self.count})\n  from_: {self.froms_}"
@@ -75,7 +81,6 @@ def init_bpe_pairs(bpe_tokens: list[BpeToken]) -> list[BpePair]:
   pair_2_num: Counter[SimplePair] = Counter()
 
   for bpe_token in bpe_tokens:
-    origin = bpe_token.origin
     count = bpe_token.count
     tokens = bpe_token.tokens
     for i in range(len(tokens) - 1):
@@ -89,79 +94,100 @@ def init_bpe_pairs(bpe_tokens: list[BpeToken]) -> list[BpePair]:
         first=pair.first,
         second=pair.second,
         count=pair_2_num[pair],
-        froms_=froms_
+        froms_=set(froms_)
     )
     bpe_pairs.append(bpe_pair)
 
   return bpe_pairs
 
+# %%
+
+
+def merge_tokens(tokens: list[bytes], target_pair: SimplePair) -> list[bytes]:
+  merged_tokens: list[bytes] = []
+  i = 0
+  while i < len(tokens):
+    if i < len(tokens) - 1 and tokens[i:i + 2] == [target_pair.first, target_pair.second]:
+      merged_tokens.append(target_pair.concat())
+      i += 2
+    else:
+      merged_tokens.append(tokens[i])
+      i += 1
+  return merged_tokens
 
 # %%
-def update_bpe_pairs(bpe_pairs: list[BpePair], target_bpe_pair: BpePair, vocab_no: int) -> list[BpePair]:
-  new_bpe_pairs: list[BpePair] = []
+
+
+def diff_tokens(new_tokens: list[bytes], target_pair: SimplePair):
+  to_add = []
+  to_remove = []
+  concat = target_pair.concat()
+  for index, token in enumerate(new_tokens):
+    if token != concat:
+      continue
+    pre_index = index - 1
+    post_index = index + 1
+    if pre_index >= 0 and new_tokens[pre_index] != concat:
+      to_add.append(SimplePair(new_tokens[pre_index], concat))
+      to_remove.append(SimplePair(new_tokens[pre_index], target_pair.first))
+    if post_index < len(new_tokens):
+      to_add.append(SimplePair(concat, new_tokens[post_index]))
+      # 如果后一个token不是concat
+      if new_tokens[post_index] != concat:
+        to_remove.append(SimplePair(target_pair.second, new_tokens[post_index]))
+      # 后一个也是合并生成的
+      else:
+        to_remove.append(SimplePair(target_pair.second, target_pair.first))
+  return to_add, to_remove
+# %%
+
+
+def count_apperence(tokens: list[bytes], pair: SimplePair) -> int:
+  count = 0
+  for first, second in zip(tokens, tokens[1:]):
+    if first == pair.first and second == pair.second:
+      count += 1
+  return count
+
+
+def update_bpe_pairs_dict(bpe_pairs_dict: dict[SimplePair, BpePair], target_bpe_pair: BpePair, vocab_no: int):
   target_pair = SimplePair(target_bpe_pair.first, target_bpe_pair.second)
+  bpe_pairs_dict.pop(target_pair)
 
-  pair_2_from: dict[SimplePair, list[BpeToken]] = {}
-  pair_2_num: Counter[SimplePair] = Counter()
+  for bpe_token in target_bpe_pair.froms_:
+    # 更新bpe_token的tokens
+    origin_tokens = bpe_token.tokens
+    new_tokens = merge_tokens(origin_tokens, target_pair)
+    bpe_token.tokens = new_tokens
 
-  for bpe_pair in bpe_pairs:
-    # 过滤原先的pair
-    if bpe_pair.first == target_pair.first and bpe_pair.second == target_pair.second:
-      continue
-    # 与当前合并无关 直接忽略
-    if bpe_pair.second != target_pair.first and bpe_pair.first != target_pair.second:
-      new_bpe_pairs.append(bpe_pair)
-      continue
-
-    new_bpe_pair = BpePair(
-        first=bpe_pair.first,
-        second=bpe_pair.second,
-        count=bpe_pair.count,
-        froms_=bpe_pair.froms_[:]
-    )
-
-    # TODO 处理abcabc 这种情况
-    # TODO 处理ining这种情况
-
-    # (a, b) 合并的为 (b, c) 更新成 (a, bc)
-    if bpe_pair.second == target_pair.first:
-      new_pair = SimplePair(bpe_pair.first, target_pair.concat())
-      for from_ in bpe_pair.froms_:
-        if new_pair.concat() in from_.origin:
-          pair_2_from.setdefault(new_pair, []).append(from_)
-          pair_2_num[new_pair] += from_.count
-          # 当前pair删除对应的from_以及数量
-          if from_ not in new_bpe_pair.froms_:
-            print(f"Warning1: vocab_no: {vocab_no} {from_} not in froms of {new_bpe_pair}")
-          if from_ in new_bpe_pair.froms_:
-            new_bpe_pair.count -= from_.count
-            new_bpe_pair.froms_.remove(from_)
-    if bpe_pair.first == target_pair.second:
-      new_pair = SimplePair(target_pair.concat(), bpe_pair.second)
-      for from_ in bpe_pair.froms_:
-        if new_pair.concat() in from_.origin:
-          pair_2_from.setdefault(new_pair, []).append(from_)
-          pair_2_num[new_pair] += from_.count
-          # 当前pair删除对应的from_以及数量
-          if from_ not in new_bpe_pair.froms_:
-            print(
-                f"Warning2: vocab_no: {vocab_no} {from_} not in froms of {new_bpe_pair} target_pair: {target_bpe_pair}")
-          if from_ in new_bpe_pair.froms_:
-            new_bpe_pair.count -= from_.count
-            new_bpe_pair.froms_.remove(from_)
-
-    new_bpe_pairs.append(new_bpe_pair)
-
-  # add new pairs
-  for pair, from_ in pair_2_from.items():
-    bpe_pair = BpePair(
-        first=pair.first,
-        second=pair.second,
-        count=pair_2_num[pair],
-        froms_=from_
-    )
-    new_bpe_pairs.append(bpe_pair)
-  return new_bpe_pairs
+    # 重新计算各个froms
+    to_add, to_remove = diff_tokens(new_tokens, target_pair)
+    for pair, num in Counter(to_remove).items():
+      bpe_pair = bpe_pairs_dict.get(pair)
+      if bpe_pair is None:
+        # 合并(0,0)
+        # bpe_token = (0,0,0)
+        # to_add = [(00,0)]  to_remove = [(0,0)]
+        continue
+      # "strengthen" 合并'h e'的时候 删除'e n'的计数 但是不影响前一个'e n'
+      total_num = count_apperence(origin_tokens, pair)
+      remain_num = total_num - num
+      assert remain_num >= 0
+      bpe_pair.count -= bpe_token.count * num
+      if remain_num == 0:
+        bpe_pair.froms_.remove(bpe_token)
+    for pair, num in Counter(to_add).items():
+      bpe_pair = bpe_pairs_dict.get(pair)
+      if bpe_pair is None:
+        bpe_pair = BpePair(
+            first=pair.first,
+            second=pair.second,
+            count=0,
+            froms_=set()
+        )
+        bpe_pairs_dict[pair] = bpe_pair
+      bpe_pair.count += (bpe_token.count * num)
+      bpe_pair.froms_.add(bpe_token)
 
 
 def get_tokens(input_path: str | os.PathLike, special_tokens: list[str]) -> list[str]:
@@ -169,13 +195,12 @@ def get_tokens(input_path: str | os.PathLike, special_tokens: list[str]) -> list
   with open(input_path, "r", encoding="utf-8") as f:
     data = f.read()
 
-  # TODO 这里的正则表达式 special_tokens 里面的|会被处理
-  contents = regex.split("|".join(special_tokens), data)
+  contents = regex.split("|".join(regex.escape(token) for token in special_tokens), data)
   for content in contents:
     tokens.extend(PAT.findall(content))
-
   return tokens
-  ####
+
+# %%
 
 
 def train_bpe(
@@ -188,10 +213,9 @@ def train_bpe(
   merges: list[tuple[bytes, bytes]] = []
 
   tokens = get_tokens(input_path, special_tokens)
-  ####
-
   bpe_tokens = init_bpe_tokens(tokens)
   bpe_pairs = init_bpe_pairs(bpe_tokens)
+  bpe_pairs_dict = {bp.to_simple(): bp for bp in bpe_pairs}
 
   for i in range(len(special_tokens)):
     vocab[i] = special_tokens[i].encode("utf-8")
@@ -202,22 +226,11 @@ def train_bpe(
 
   vocab_merge_start = 256 + len(special_tokens)
   for vocab_no in range(vocab_merge_start, vocab_size):
-    bpe_pair = max(bpe_pairs)
+    bpe_pair = max(bpe_pairs_dict.values())
     vocab[vocab_no] = bpe_pair.first + bpe_pair.second
     merges.append(bpe_pair.to_pair())
-    bpe_pairs = update_bpe_pairs(bpe_pairs, bpe_pair, vocab_no)
+    update_bpe_pairs_dict(bpe_pairs_dict, bpe_pair, vocab_no)
   return vocab, merges
 
 
-def print_top(bpe_pairs: list[BpePair], n=8):
-  bpe_pairs.sort(reverse=True)
-  print("==" * 20)
-  print("Top BPE Pairs:")
-  for i in range(min(n, len(bpe_pairs))):
-    print(f"  {i + 1}: {bpe_pairs[i]}")
-
-
 # %%
-
-# %%
-tokens = ["training", "ing"]
