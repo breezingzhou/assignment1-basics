@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 
 
 @dataclass
@@ -54,3 +55,30 @@ class BpePair:
 
   def __repr__(self) -> str:
     return f"BpePair({self.first!r}, {self.second!r}, count={self.count})\n  from_: {self.froms_}"
+
+# %%
+
+
+class ContentType(Enum):
+  NORMAL = "normal"
+  SPECIAL = "special"
+
+
+class Content:
+  type: ContentType
+  content: str
+
+  def __init__(self, type_: ContentType, content: str):
+    self.type = type_
+    self.content = content
+
+  def __repr__(self) -> str:
+    return f"Content(type={self.type}, content={self.content!r})"
+
+  @classmethod
+  def special(cls, content: str) -> "Content":
+    return cls(ContentType.SPECIAL, content)
+
+  @classmethod
+  def normal(cls, content: str) -> "Content":
+    return cls(ContentType.NORMAL, content)

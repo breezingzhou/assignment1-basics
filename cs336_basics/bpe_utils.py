@@ -1,6 +1,7 @@
 # %%
+from collections import Counter
 import regex
-from bpe_types import BpeToken, BpePair, SimplePair
+from cs336_basics.bpe_types import BpeToken, BpePair, SimplePair, Content, ContentType
 
 # $$
 PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
@@ -60,3 +61,28 @@ def count_apperence(tokens: list[bytes], pair: SimplePair) -> int:
     if first == pair.first and second == pair.second:
       count += 1
   return count
+
+# %%
+
+
+def split_special_tokens_training(data: str, special_tokens: list[str]):
+  tokens = Counter[str]()
+  for content in regex.splititer("|".join(regex.escape(token) for token in special_tokens), data):
+    for token in PAT.findall(content):
+      tokens[token] += 1
+  return tokens
+
+
+def split_special_tokens_tokenizer(text: str, special_tokens: list[str]) -> list[Content]:
+  parts: list[Content] = []
+  pattern = "|".join(regex.escape(special_token) for special_token in special_tokens)
+  last_pos = 0
+  for match_ in regex.finditer(pattern, text):
+    if match_.start() > last_pos:
+      parts.append(Content.normal(text[last_pos:match_.start()]))
+    parts.append(Content.special(match_.group()))
+    last_pos = match_.end()
+  # 剩余普通文本
+  if last_pos < len(text):
+    parts.append(Content.normal(text[last_pos:]))
+  return parts
