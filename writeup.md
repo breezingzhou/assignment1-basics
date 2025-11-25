@@ -30,9 +30,8 @@ def decode_utf8_bytes_to_str_wrong(bytestring: bytes):
 uft-8编码是变长编码，可变长度1-4字节，有可能多个字节才对应一个unicode字符。 example: b'\xe4\xb8\xad\xe5\x9b\xbd'
 
 
-
 ### Give a two byte sequence that does not decode to any Unicode character(s).
-
+b'\xb0\x80' utf-8编码长度为2时 首字节范围为(0xC0–0xDF) 次字节范围为(0x80–0xBF)
 
 ## Problem(train_bpe_tinystories):BPE Training on TinyStories
 ### Train a byte-level BPE tokenizer on the TinyStories dataset,using a maximum vocabulary size of 10,000. Make sure to add the TinyStories `<|endoftext|>` special token to thevocabulary. Serialize the resulting vocabulary and merges to disk for further inspection. How many hours and memory did training take? What is the longest token in the vocabulary? Does it make sense?<br>
@@ -41,9 +40,13 @@ uft-8编码是变长编码，可变长度1-4字节，有可能多个字节才对
 * (a) The `<|endoftext|>` token delimits documents in the data files.
 * (b) The `<|endoftext|>` token is handled as a special case before the BPE merges are applied.
 
+耗时: 194s  消耗内存：1.17G
+最长的tokens为 ["Ġaccomplishment", "Ġdisappointment", "Ġresponsibility"]
+最长token是在“压缩频率”和“粒度粗细”之间找到的平衡点。如果最长词过短，说明词被切分的很碎，语义丢失，序列变长。如果最长词过长，词汇表冗余，泛化能力下降。
 
 
 ### Profile your code. What part of the tokenizer training process takes the most time?
+BPE Training最耗时的部分是 选择出现频率最高的pair  (max函数)
 
 
 ## Problem(train_bpe_expts_owt):BPE Training on OpenWebText
