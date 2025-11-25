@@ -69,3 +69,12 @@ bpe_pairs_dict = {bp.to_simple(): bp for bp in bpe_pairs}
 bpe_pair = bpe_pairs_dict.get(SimplePair(first=b'w', second=b'h'))
 assert bpe_pair is not None
 b" whether" in [from_.origin for from_ in bpe_pair.froms_]
+
+#%%
+def decode_utf8_bytes_to_str_wrong(bytestring: bytes):
+  return "".join([bytes([b]).decode("utf-8") for b in bytestring])
+bytestring = '中国'.encode('utf-8')
+decode_utf8_bytes_to_str_wrong(bytestring)
+#%%
+ord('中')
+chr(20013)
