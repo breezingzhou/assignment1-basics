@@ -1,5 +1,6 @@
 # %%
 from collections.abc import Iterable, Iterator
+from functools import lru_cache
 import json
 
 from cs336_basics.bpe_utils import PAT, merge_tokens, split_special_tokens_tokenizer
@@ -12,14 +13,16 @@ from cs336_basics.bpe_types import Content, ContentType, SimplePair
 class BpeTokenizer:
   vocab: dict[int, bytes]
   merges: list[tuple[bytes, bytes]]
-  special_tokens: list[str] | None
+  special_tokens: list[str] | None = None
   vocab_rev: dict[bytes, int]
 
   def __init__(self, vocab: dict[int, bytes], merges: list[tuple[bytes, bytes]], special_tokens: list[str] | None = None):
     self.vocab = vocab
     self.merges = merges
-    self.special_tokens = special_tokens
     self.vocab_rev = {v: k for k, v in vocab.items()}
+    if special_tokens is not None:
+      self.special_tokens = special_tokens[::]
+      self.special_tokens.sort(key=lambda x: len(x), reverse=True)
 
   def encode(self, text: str) -> list[int]:
     res = []
@@ -38,6 +41,7 @@ class BpeTokenizer:
           res.extend(self.encode_token(token))
     return res
 
+  @lru_cache(maxsize=10000)
   def encode_token(self, token: str) -> list[int]:
     origin = token.encode("utf-8")
     byte_tokens = [origin[i:i + 1] for i in range(len(origin))]
@@ -51,4 +55,6 @@ class BpeTokenizer:
       yield from self.encode(item)
 
   def decode(self, ids: list[int]) -> str:
-    return ""
+    bytes_list = [self.vocab.get(i, b"") for i in ids]
+    decoded = b"".join(bytes_list).decode("utf-8", errors="replace")
+    return decoded
