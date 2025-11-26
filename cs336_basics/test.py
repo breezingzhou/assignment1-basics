@@ -60,7 +60,7 @@ from train_bpe import (
     diff_tokens,
     SimplePair
 )
-special_tokens=["<|endoftext|>"]
+special_tokens = ["<|endoftext|>"]
 tokens = get_tokens(input_path, special_tokens)
 
 bpe_tokens = init_bpe_tokens(tokens)
@@ -70,12 +70,16 @@ bpe_pair = bpe_pairs_dict.get(SimplePair(first=b'w', second=b'h'))
 assert bpe_pair is not None
 b" whether" in [from_.origin for from_ in bpe_pair.froms_]
 
-#%%
+# %%
+
+
 def decode_utf8_bytes_to_str_wrong(bytestring: bytes):
   return "".join([bytes([b]).decode("utf-8") for b in bytestring])
+
+
 bytestring = '中国'.encode('utf-8')
 decode_utf8_bytes_to_str_wrong(bytestring)
-#%%
+# %%
 ord('中')
 chr(20013)
 # %%
@@ -89,3 +93,7 @@ PAT = regex.compile(PATTERN)
 for x in PAT.finditer("Hello, world! I'm Breezing. 1234 中国"):
   print(x.group())
 PAT.findall("Hello, world! I'm Breezing. 1234 中国")
+# %%
+special_tokens = ["<|endoftext|>", "<|endoftext|><|endoftext|>"]
+special_tokens2 = special_tokens[::]
+special_tokens2.sort(key=lambda x: len(x), reverse=True)
