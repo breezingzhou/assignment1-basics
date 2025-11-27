@@ -158,3 +158,13 @@ x_expanded = repeat(x, 'h w -> h (repeat w)', repeat=2)
 
 print("原始数据:\n", x)
 print("扩展后数据:\n", x_expanded)
+#%%
+import torch
+x = torch.tensor([[1, 3, 2], [4, 1, 5]])
+max_vals = x.max(dim=0, keepdim=True)
+
+x2 = x - max_vals.values
+
+x3 = x2.exp()
+x4 = x3.sum(dim=0, keepdim=True)
+x3 / x4
