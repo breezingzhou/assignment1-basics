@@ -1,8 +1,12 @@
 # %%
 import math
 import torch
-from torch.nn import Module, Linear, init, Embedding, RMSNorm, SiLU
+from torch import Tensor
+from torch.nn import Module, Linear, init, Embedding, RMSNorm, SiLU, MultiheadAttention
 from einops import rearrange, einsum, reduce, repeat
+from jaxtyping import Bool, Float, Int
+
+from cs336_basics.nn_utils import my_scaled_dot_product_attention
 
 # %%
 
@@ -121,7 +125,7 @@ class MyRotaryPositionalEmbedding(Module):
     self.max_seq_len = max_seq_len
 
     self.rot_matrix = self.create_rot_matrix(theta, d_k, max_seq_len, device)
-    self.register_buffer("rot_matrix", self.rot_matrix, persistent=False)
+    self.register_buffer("my_rot_matrix", self.rot_matrix, persistent=False)
 
   def create_rot_matrix(self, theta: float, d_k: int, max_seq_len: int, device: torch.device | None = None) -> torch.Tensor:
     """
@@ -152,10 +156,69 @@ class MyRotaryPositionalEmbedding(Module):
     rot_matrix = einsum(rot_submat_repeat, block_eye, "... d_k1 d_k2, d_k1 d_k2 -> ... d_k1 d_k2")
     return rot_matrix
 
-  def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
-    """
-    x: (Float[Tensor, "... sequence_length d_k"]): Input tensor to run RoPE on.
-    token_positions: (Int[Tensor, "... sequence_length"]): Tensor of shape (batch_size, sequence_length) with the token positions
-    """
-
+  def forward(self, x: Float[Tensor, "... sequence_length d_k"], token_positions: Int[Tensor, "... sequence_length"]) -> Float[Tensor, " ... sequence_length d_k"]:
     return einsum(x, self.rot_matrix[token_positions], "... sequence_length d_k2 , ... sequence_length d_k1 d_k2   -> ... sequence_length d_k1")
+
+
+class MyMultiHeadSelfAttention(Module):
+
+  def __init__(self, d_model: int, num_heads: int, rope: MyRotaryPositionalEmbedding | None = None, device: torch.device | None = None, dtype: torch.dtype | None = None):
+    """
+      q_proj_weight: Float[Tensor, " d_k d_in"],
+      k_proj_weight: Float[Tensor, " d_k d_in"],
+      v_proj_weight: Float[Tensor, " d_v d_in"],
+      o_proj_weight: Float[Tensor, " d_model d_v"],
+      in_features: Float[Tensor, " ... sequence_length d_in"],
+    """
+    super().__init__()
+    self.d_model = d_model
+    self.num_heads = num_heads
+    self.device = device
+    self.rope = rope
+
+    self.d_k = d_model // num_heads
+    self.d_v = d_model // num_heads
+
+    self.q_proj = MyLinear(self.d_k * num_heads, d_model, device=device, dtype=dtype)
+    self.k_proj = MyLinear(self.d_k * num_heads, d_model, device=device, dtype=dtype)
+    self.v_proj = MyLinear(self.d_v * num_heads, d_model, device=device, dtype=dtype)
+    self.out_proj = MyLinear(d_model, self.d_v * num_heads, device=device, dtype=dtype)
+    self.reset_parameters()
+
+  def reset_parameters(self) -> None:
+    self.q_proj.reset_parameters()
+    self.k_proj.reset_parameters()
+    self.v_proj.reset_parameters()
+    self.out_proj.reset_parameters()
+
+  def _create_look_ahead_mask(self, seq_len: int) -> Bool[Tensor, " ... sequence_length sequence_length"]:
+    mask = torch.tril(torch.ones((seq_len, seq_len), device=self.device)).bool()
+    return mask
+
+  def forward(self, in_features: Float[Tensor, " ... sequence_length d_in"], token_positions: Int[Tensor, " ... sequence_length"] | None = None) -> Float[Tensor, " ... sequence_length d_out"]:
+    """
+      MultiHead(Q, K, V) = Concat(head_1,...,head_h)
+        for head_i = Attention(Q_i,K_i,V_i)
+
+      MultiHeadSelfAttention(x) = W_o * MultiHead(W_q * x, W_k * x, W_v * x)
+    """
+    seq_len = in_features.size(-2)
+    Q = self.q_proj(in_features)  # Float[Tensor, " ... sequence_length d_k"]
+    K = self.k_proj(in_features)  # Float[Tensor, " ... sequence_length d_k"]
+    V = self.v_proj(in_features)  # Float[Tensor, " ... sequence_length d_v"]
+
+    Q = rearrange(Q, '... s (h d_k) -> ... h s d_k', h=self.num_heads)
+    K = rearrange(K, '... s (h d_k) -> ... h s d_k', h=self.num_heads)
+    V = rearrange(V, '... s (h d_v) -> ... h s d_v', h=self.num_heads)
+
+    if self.rope is not None:
+      if token_positions is None:
+        token_positions = torch.arange(seq_len, device=in_features.device)
+      Q = self.rope(Q, token_positions)
+      K = self.rope(K, token_positions)
+
+    mask = self._create_look_ahead_mask(seq_len)
+    output = my_scaled_dot_product_attention(Q, K, V, mask)
+    output = rearrange(output, '... h s d_v -> ... s (h d_v)')
+
+    return self.out_proj(output)
