@@ -1,7 +1,7 @@
 # %%
 import math
 import torch
-from torch.nn import Module, Linear, init, Embedding, RMSNorm
+from torch.nn import Module, Linear, init, Embedding, RMSNorm, SiLU
 from einops import rearrange, einsum, reduce
 
 # %%
@@ -80,3 +80,33 @@ class MyRMSNorm(Module):
     result = einsum(self.weight, x_normalized, "d_model, ... d_model -> ... d_model")
 
     return result.to(in_dtype)
+
+
+class MySwiGLU(Module):
+  d_model: int
+  d_ff: int
+
+  def __init__(self, d_model: int, d_ff: int, device: torch.device | None = None, dtype: torch.dtype | None = None):
+    """
+    w1_weight (Float[Tensor, "d_ff d_model"])
+    w2_weight (Float[Tensor, "d_model d_ff"])
+    w3_weight (Float[Tensor, "d_ff d_model"])
+    """
+    super().__init__()
+    self.d_model = d_model
+    self.d_ff = d_ff
+    self.w1 = MyLinear(d_model, d_ff, device=device, dtype=dtype)
+    self.w2 = MyLinear(d_ff, d_model, device=device, dtype=dtype)
+    self.w3 = MyLinear(d_model, d_ff, device=device, dtype=dtype)
+    self.reset_parameters()
+
+  def reset_parameters(self) -> None:
+    self.w1.reset_parameters()
+    self.w2.reset_parameters()
+    self.w3.reset_parameters()
+
+  def forward(self, x: torch.Tensor) -> torch.Tensor:
+    """
+    FFN(x) = SwiGLU(x,W1,W2,W3) = W2(SiLU(W1x)⊙W3x)
+    """
+    return self.w2(einsum(SiLU()(self.w1(x)), self.w3(x), "... d_ff, ... d_ff -> ... d_ff"))
