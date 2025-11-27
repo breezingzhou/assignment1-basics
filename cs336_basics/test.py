@@ -97,3 +97,16 @@ PAT.findall("Hello, world! I'm Breezing. 1234 中国")
 special_tokens = ["<|endoftext|>", "<|endoftext|><|endoftext|>"]
 special_tokens2 = special_tokens[::]
 special_tokens2.sort(key=lambda x: len(x), reverse=True)
+# %%
+import torch
+from einops import einsum, reduce, rearrange
+d_model = 3
+x = torch.Tensor([[1, 2, 3], [4, 5, 6]])
+weight = torch.Tensor([1, 1, 1])
+eps = 1e-5
+norm = reduce(x.pow(2), '... d -> ...', "mean")
+rms = torch.sqrt_(norm + eps)
+rms = rearrange(rms, '... -> ... 1')
+x_normalized = x / rms
+result = einsum(x_normalized, weight, "... d_model, d_model -> ... d_model")
+# %%
