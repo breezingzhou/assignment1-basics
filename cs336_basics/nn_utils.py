@@ -1,11 +1,13 @@
 # %%
 import torch
 from torch import Tensor
-
+from jaxtyping import Bool, Float, Int
+from einops import einsum, reduce, rearrange
 
 # %%
 
-def my_softmax(in_features: Tensor, dim: int) -> Tensor:
+
+def my_softmax(in_features: Float[Tensor, "..."], dim: int) -> Float[Tensor, "..."]:
   """
   Args:
     in_features (Float[Tensor, "..."]): Input features to softmax. Shape is arbitrary.
@@ -19,3 +21,22 @@ def my_softmax(in_features: Tensor, dim: int) -> Tensor:
   exp_vals = torch.exp(in_features - max_vals)
   sum_exp_vals = torch.sum(exp_vals, dim=dim, keepdim=True)
   return exp_vals / sum_exp_vals
+
+
+# %%
+def my_scaled_dot_product_attention(
+    Q: Float[Tensor, " ... queries d_k"],
+    K: Float[Tensor, " ... keys d_k"],
+    V: Float[Tensor, " ... values d_v"],
+    mask: Bool[Tensor, " ... queries keys"] | None = None,
+) -> Float[Tensor, " ... queries d_v"]:
+  """
+   Attention(Q,K,V)=softmax(Q_T*K / sqrt(d_k)) V
+  """
+  d_k = Q.size(-1)
+  pre_softmax = einsum(Q, K, "... queries d_k, ... keys d_k -> ... queries keys")
+
+  if mask is not None:
+    pre_softmax = pre_softmax.masked_fill(~mask, float('-inf'))
+  gate = my_softmax(pre_softmax / torch.sqrt(torch.tensor(d_k, dtype=Q.dtype)), dim=-1)
+  return einsum(gate, V, "... queries keys, ... keys d_v -> ... queries d_v")
