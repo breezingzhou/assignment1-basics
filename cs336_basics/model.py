@@ -1,8 +1,8 @@
 # %%
 import math
 import torch
-from torch.nn import Module, Linear, init, Embedding
-from einops import rearrange, einsum
+from torch.nn import Module, Linear, init, Embedding, RMSNorm
+from einops import rearrange, einsum, reduce
 
 # %%
 
@@ -32,7 +32,6 @@ class MyEmbedding(Module):
   num_embeddings: int
   embedding_dim: int
 
-
   def __init__(self, num_embeddings: int, embedding_dim: int, device: torch.device | None = None, dtype: torch.dtype | None = None):
     super().__init__()
     factory_kwargs = {"device": device, "dtype": dtype}
@@ -48,3 +47,36 @@ class MyEmbedding(Module):
 
   def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
     return self.weight[token_ids]
+
+
+class MyRMSNorm(Module):
+  d_model: int
+  eps: float
+
+  def __init__(self, d_model: int, eps: float = 1e-5, device: torch.device | None = None, dtype: torch.dtype | None = None):
+    super().__init__()
+    factory_kwargs = {"device": device, "dtype": dtype}
+    self.d_model = d_model
+    self.eps = eps
+    self.weight = torch.nn.Parameter(
+        data=torch.empty(self.d_model, **factory_kwargs)
+    )
+    self.reset_parameters()
+
+  def reset_parameters(self) -> None:
+    init.ones_(self.weight)
+
+  def forward(self, x: torch.Tensor) -> torch.Tensor:
+    """
+    RMSNorm(a_i) = ( a_i / RMS(a) ) * g_i
+    RMS(a) = sqrt( (1/d) * sum(a_i^2) + eps )
+    """
+    in_dtype = x.dtype
+    x = x.to(torch.float32)
+
+    rms = torch.sqrt_(reduce(x.pow(2), '... d -> ...', "mean") + self.eps)
+    rms = rearrange(rms, '... -> ... 1')
+    x_normalized = x / rms
+    result = einsum(self.weight, x_normalized, "d_model, ... d_model -> ... d_model")
+
+    return result.to(in_dtype)
