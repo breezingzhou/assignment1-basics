@@ -110,3 +110,51 @@ rms = rearrange(rms, '... -> ... 1')
 x_normalized = x / rms
 result = einsum(x_normalized, weight, "... d_model, d_model -> ... d_model")
 # %%
+import torch
+from einops import einsum, reduce, rearrange, repeat
+max_seq_len = 7
+d_k = 4
+d = d_k // 2
+theta = 2
+i = torch.arange(1, 1 + max_seq_len)
+k = torch.arange(0, d_k // 2, )
+theta_k = 1 / (theta ** (2 * k / d_k))
+theta_ik = einsum(i, theta_k, "i, k -> i k")  # Shape: (max_seq_len, d_k/2)
+
+cos_val = torch.cos(theta_ik)
+sin_val = torch.sin(theta_ik)
+
+rot_submat = torch.zeros(*theta_ik.shape, 2, 2)
+rot_submat[..., 0, 0] = cos_val  # [d] → [d,1,1]
+rot_submat[..., 0, 1] = -sin_val
+rot_submat[..., 1, 0] = sin_val
+rot_submat[..., 1, 1] = cos_val
+
+rot_submat_reshape = rearrange(rot_submat, 'i d h w -> i h (d w)')
+rot_submat_repeat = repeat(rot_submat_reshape, 'i h d_k -> i (d h) d_k', d=d)
+eye = torch.eye(d_k // 2)
+block_eye = repeat(eye, 'i j -> i h j w', h=2, w=2)
+block_eye = rearrange(block_eye, 'i h j w -> (i h) (j w)')  # 形状: (2l, 2l)
+
+rot_matrix  = None
+
+#%%
+import torch
+from einops import rearrange, repeat
+
+l = 3
+size = 2 * l
+
+eye_l = torch.eye(l)
+block_eye_t = repeat(eye_l, 'i j -> i h j w', h=2, w=2)  # 形状: (l, 2, l, 2)
+block_eye = rearrange(block_eye_t, 'i h j w -> (i h) (j w)')  # 形状: (2l, 2l)
+
+#%%
+import torch
+from einops import repeat
+
+x = torch.arange(8).reshape(4, 2)  # tensor([[0, 1], [2, 3], [4, 5], [6, 7]])
+x_expanded = repeat(x, 'h w -> h (repeat w)', repeat=2)
+
+print("原始数据:\n", x)
+print("扩展后数据:\n", x_expanded)
