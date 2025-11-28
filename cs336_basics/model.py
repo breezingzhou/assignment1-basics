@@ -28,8 +28,8 @@ class MyLinear(Module):
   def reset_parameters(self) -> None:
     init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
-  def forward(self, input: torch.Tensor) -> torch.Tensor:
-    return einsum(self.weight, input, "out_features in_features, ... in_features -> ... out_features")
+  def forward(self, input: Float[Tensor, "... d_in"]) -> Float[Tensor, "... d_out"]:
+    return einsum(self.weight, input, "d_out d_in, ... d_in -> ... d_out")
 
 
 class MyEmbedding(Module):
@@ -49,7 +49,7 @@ class MyEmbedding(Module):
   def reset_parameters(self) -> None:
     init.normal_(self.weight, mean=0.0, std=1.0)
 
-  def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+  def forward(self, token_ids: Int[Tensor, "..."]) -> Float[Tensor, "... d_model"]:
     return self.weight[token_ids]
 
 
@@ -70,7 +70,7 @@ class MyRMSNorm(Module):
   def reset_parameters(self) -> None:
     init.ones_(self.weight)
 
-  def forward(self, x: torch.Tensor) -> torch.Tensor:
+  def forward(self, x: Float[Tensor, "... d_model"]) -> Float[Tensor, "... d_model"]:
     """
     RMSNorm(a_i) = ( a_i / RMS(a) ) * g_i
     RMS(a) = sqrt( (1/d) * sum(a_i^2) + eps )
@@ -78,7 +78,7 @@ class MyRMSNorm(Module):
     in_dtype = x.dtype
     x = x.to(torch.float32)
 
-    rms = torch.sqrt_(reduce(x.pow(2), '... d -> ...', "mean") + self.eps)
+    rms = torch.sqrt(reduce(x.pow(2), '... d_model -> ...', "mean") + self.eps)
     rms = rearrange(rms, '... -> ... 1')
     x_normalized = x / rms
     result = einsum(self.weight, x_normalized, "d_model, ... d_model -> ... d_model")
@@ -109,7 +109,7 @@ class MySwiGLU(Module):
     self.w2.reset_parameters()
     self.w3.reset_parameters()
 
-  def forward(self, x: torch.Tensor) -> torch.Tensor:
+  def forward(self, x: Float[Tensor, "... d_model"]) -> Float[Tensor, "... d_model"]:
     """
     FFN(x) = SwiGLU(x,W1,W2,W3) = W2(SiLU(W1x)⊙W3x)
     """
@@ -127,7 +127,7 @@ class MyRotaryPositionalEmbedding(Module):
     self.rot_matrix = self.create_rot_matrix(theta, d_k, max_seq_len, device)
     self.register_buffer("my_rot_matrix", self.rot_matrix, persistent=False)
 
-  def create_rot_matrix(self, theta: float, d_k: int, max_seq_len: int, device: torch.device | None = None) -> torch.Tensor:
+  def create_rot_matrix(self, theta: float, d_k: int, max_seq_len: int, device: torch.device | None = None) -> Tensor:
     """
     Create the r tensor for RoPE.
     θ_ik = i / ( θ ** ((2k - 2) / d_k) )  for k = 1, 2, ..., d_k/2
