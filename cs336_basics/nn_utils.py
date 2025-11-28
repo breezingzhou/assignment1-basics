@@ -40,3 +40,16 @@ def my_scaled_dot_product_attention(
     pre_softmax = pre_softmax.masked_fill(~mask, float('-inf'))
   gate = my_softmax(pre_softmax / torch.sqrt(torch.tensor(d_k, dtype=Q.dtype)), dim=-1)
   return einsum(gate, V, "... queries keys, ... keys d_v -> ... queries d_v")
+
+
+def my_sigmoid(in_features: Float[Tensor, "..."]) -> Float[Tensor,"..."]:
+  """
+  sigmoid(x) = 1 / (1 + exp(-x))
+  """
+  return 1 / (1 + torch.exp(-in_features))
+
+def my_silu(in_features: Float[Tensor, "..."]) -> Float[Tensor,"..."]:
+  """
+  SiLU(x) = x * sigmoid(x)
+  """
+  return in_features * my_sigmoid(in_features)
