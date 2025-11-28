@@ -203,9 +203,9 @@ class MyMultiHeadSelfAttention(Module):
       MultiHeadSelfAttention(x) = W_o * MultiHead(W_q * x, W_k * x, W_v * x)
     """
     seq_len = in_features.size(-2)
-    Q = self.q_proj(in_features)  # Float[Tensor, " ... sequence_length d_k"]
-    K = self.k_proj(in_features)  # Float[Tensor, " ... sequence_length d_k"]
-    V = self.v_proj(in_features)  # Float[Tensor, " ... sequence_length d_v"]
+    Q = self.q_proj(in_features)  # type: Float[Tensor, " ... sequence_length d_k"]
+    K = self.k_proj(in_features)  # type: Float[Tensor, " ... sequence_length d_k"]
+    V = self.v_proj(in_features)  # type: Float[Tensor, " ... sequence_length d_v"]
 
     Q = rearrange(Q, '... s (h d_k) -> ... h s d_k', h=self.num_heads)
     K = rearrange(K, '... s (h d_k) -> ... h s d_k', h=self.num_heads)

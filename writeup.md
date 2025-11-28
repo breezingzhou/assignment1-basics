@@ -55,3 +55,32 @@ BPE Training最耗时的部分是 选择出现频率最高的pair  (max函数)
 
 
 ### Compare and contrast the tokenizer that you get training on TinyStories versus OpenWebText.
+
+
+
+## Problem(tokenizer_experiments):Experimentswithtokenizers
+
+
+## Problem(transformer_accounting):TransformerLMresourceaccounting
+### Consider GPT-2 XL,which has the following configuration. Suppose we constructed our model using this configuration. How many trainable parameters would our model have? Assuming each parameter is represented using single-precision floating point, how much memory is required to just load this model?
+
+  * vocab_size : 50,257
+  * context_length : 1,024
+  * num_layers : 48
+  * d_model : 1,600
+  * num_heads : 25
+  * d_ff : 6,400
+
+
+###  Identify the matrix multiplies required to complete a forward pass of our GPT-2XL-shaped model. How many FLOPs do these matrix multiplies require intotal? Assume that our input sequence has context_length tokens.
+
+
+
+### Based on your analysis above, which parts of the model require the most FLOPs?
+
+
+### Repeat your analysis withGPT-2 small (12layers, 768d_model, 12heads), GPT-2 medium(24 layers, 1024d_model, 16heads), and GPT-2large(36layers, 1280d_model, 20heads). As the model size increases, which parts of the Transformer LM take up proportionally more or less of the total FLOPs?
+
+
+
+### Take GPT-2 XL and increase the context length to 16,384. How does the total FLOPs for one forward pass change? How do the relative contribution of FLOPs of the model components change?
