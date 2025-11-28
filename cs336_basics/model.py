@@ -182,14 +182,14 @@ class MyMultiHeadSelfAttention(Module):
     self.q_proj = MyLinear(self.d_k * num_heads, d_model, device=device, dtype=dtype)
     self.k_proj = MyLinear(self.d_k * num_heads, d_model, device=device, dtype=dtype)
     self.v_proj = MyLinear(self.d_v * num_heads, d_model, device=device, dtype=dtype)
-    self.out_proj = MyLinear(d_model, self.d_v * num_heads, device=device, dtype=dtype)
+    self.output_proj = MyLinear(d_model, self.d_v * num_heads, device=device, dtype=dtype)
     self.reset_parameters()
 
   def reset_parameters(self) -> None:
     self.q_proj.reset_parameters()
     self.k_proj.reset_parameters()
     self.v_proj.reset_parameters()
-    self.out_proj.reset_parameters()
+    self.output_proj.reset_parameters()
 
   def _create_look_ahead_mask(self, seq_len: int) -> Bool[Tensor, " ... sequence_length sequence_length"]:
     mask = torch.tril(torch.ones((seq_len, seq_len), device=self.device)).bool()
@@ -221,4 +221,20 @@ class MyMultiHeadSelfAttention(Module):
     output = my_scaled_dot_product_attention(Q, K, V, mask)
     output = rearrange(output, '... h s d_v -> ... s (h d_v)')
 
-    return self.out_proj(output)
+    return self.output_proj(output)
+
+
+class MyTransformerBlock(Module):
+  def __init__(self, d_model: int, num_heads: int, d_ff: int, max_seq_len: int, theta: float, device: torch.device | None = None, dtype: torch.dtype | None = None):
+    super().__init__()
+    self.rope = MyRotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len, device=device)
+    self.attn = MyMultiHeadSelfAttention(
+        d_model, num_heads, rope=self.rope, device=device, dtype=dtype)
+    self.ln1 = MyRMSNorm(d_model, device=device, dtype=dtype)
+    self.ffn = MySwiGLU(d_model, d_ff, device=device, dtype=dtype)
+    self.ln2 = MyRMSNorm(d_model, device=device, dtype=dtype)
+
+  def forward(self, x: Float[Tensor, "batch sequence_length d_model"], token_positions: Int[Tensor, "sequence_length"] | None = None) -> Float[Tensor, "batch sequence_length d_model"]:
+    x = x + self.attn(self.ln1(x), token_positions=token_positions)
+    x = x + self.ffn(self.ln2(x))
+    return x
