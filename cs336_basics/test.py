@@ -136,9 +136,9 @@ eye = torch.eye(d_k // 2)
 block_eye = repeat(eye, 'i j -> i h j w', h=2, w=2)
 block_eye = rearrange(block_eye, 'i h j w -> (i h) (j w)')  # 形状: (2l, 2l)
 
-rot_matrix  = None
+rot_matrix = None
 
-#%%
+# %%
 import torch
 from einops import rearrange, repeat
 
@@ -149,7 +149,7 @@ eye_l = torch.eye(l)
 block_eye_t = repeat(eye_l, 'i j -> i h j w', h=2, w=2)  # 形状: (l, 2, l, 2)
 block_eye = rearrange(block_eye_t, 'i h j w -> (i h) (j w)')  # 形状: (2l, 2l)
 
-#%%
+# %%
 import torch
 from einops import repeat
 
@@ -158,7 +158,7 @@ x_expanded = repeat(x, 'h w -> h (repeat w)', repeat=2)
 
 print("原始数据:\n", x)
 print("扩展后数据:\n", x_expanded)
-#%%
+# %%
 import torch
 x = torch.tensor([[1, 3, 2], [4, 1, 5]])
 max_vals = x.max(dim=0, keepdim=True)
@@ -168,3 +168,39 @@ x2 = x - max_vals.values
 x3 = x2.exp()
 x4 = x3.sum(dim=0, keepdim=True)
 x3 / x4
+
+# %%
+import torch
+from cs336_basics.nn_utils import my_softmax
+import torch.nn.functional as F
+inputs = torch.tensor(
+    [
+        [
+            [0.1088, 0.1060, 0.6683, 0.5131, 0.0645],
+            [0.4538, 0.6852, 0.2520, 0.3792, 0.2675],
+            [0.4578, 0.3357, 0.6384, 0.0481, 0.5612],
+            [0.9639, 0.8864, 0.1585, 0.3038, 0.0350],
+        ],
+        [
+            [0.3356, 0.9013, 0.7052, 0.8294, 0.8334],
+            [0.6333, 0.4434, 0.1428, 0.5739, 0.3810],
+            [0.9476, 0.5917, 0.7037, 0.2987, 0.6208],
+            [0.8541, 0.1803, 0.2054, 0.4775, 0.8199],
+        ],
+    ]
+)
+inputs = inputs * 1000
+targets = torch.tensor([[1, 0, 2, 2], [4, 1, 4, 0]])
+inputs = inputs.view(-1, inputs.size(-1))
+targets = targets.view(-1)
+expected = F.cross_entropy(inputs.view(-1, inputs.size(-1)), targets.view(-1))
+
+# q = my_softmax(inputs, dim=-1)
+
+batch_indices = torch.arange(inputs.size(0), device=inputs.device)
+# -torch.log(q)[batch_indices, targets].mean()
+
+max_ = inputs.max(dim=-1, keepdim=True)
+
+logsumexp = torch.log(torch.exp(inputs - max_.values).sum(dim=-1, keepdim=True)) + max_.values
+(inputs - logsumexp)[batch_indices, targets].mean()
