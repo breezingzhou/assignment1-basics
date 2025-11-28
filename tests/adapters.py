@@ -13,7 +13,7 @@ from torch import Tensor
 from cs336_basics.nn_utils import my_scaled_dot_product_attention, my_softmax
 from cs336_basics.tokenizer import BpeTokenizer
 from cs336_basics.train_bpe import train_bpe
-from cs336_basics.model import MyLinear, MyEmbedding, MyMultiHeadSelfAttention, MyRMSNorm, MyRotaryPositionalEmbedding, MySwiGLU, MyTransformerBlock
+from cs336_basics.model import MyLinear, MyEmbedding, MyMultiHeadSelfAttention, MyRMSNorm, MyRotaryPositionalEmbedding, MySwiGLU, MyTransformerBlock, MyTransformerLM
 
 
 def run_linear(
@@ -387,7 +387,9 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    lm = MyTransformerLM(vocab_size, context_length, d_model, num_layers, num_heads, d_ff, rope_theta)
+    lm.load_state_dict(weights)
+    return lm.forward(in_indices)
 
 
 def run_rmsnorm(
