@@ -176,3 +176,52 @@ Context Length Model:
 | 3.418863534927368  | 3.2997658370902017e-21 | 1498669916356608.0     |
 | 2.9524576663970947 | 2.830752258827424e-22  | 5.523777196235162e+16  |
 | 2.5719187259674072 | 3.145280252525542e-23  | 1.7737461767014973e+18 |
+
+## Problem (adamwAccounting): Resource accounting for training with AdamW
+### How much peak memory does running AdamW require? Decompose your answer based on the memory usage of the parameters, activations, gradients, and optimizer state. Express your answer in terms of the batch_size and the model hyperparameters (vocab_size, context_length, num_layers, d_model, num_heads). Assume d_ff = 4×d_model. For simplicity, when calculating memory usage of activations, consider only the following components:
+- Transformer block
+  - RMSNorm(s)
+  - Multi-head self-attention sublayer: QKV projections, Q*K matrix multiply, softmax, weighted sum of values, output projection.
+  - Position-wise feed-forward: W1 matrix multiply, SiLU, W2 matrix multiply
+- final RMSNorm
+- output embedding
+- cross-entropy on logits
+
+运行AdamW的峰值内存分布
+| Component       | Part                    | expresion                                                                      |
+| --------------- | ----------------------- | ------------------------------------------------------------------------------ |
+| parameters      |                         |                                                                                |
+|                 | token_embedding         | vocab_size * d_model                                                           |
+|                 | transformer_block       | 4 * d_model * d_model +      3 * d_model * d_ff + 2 * d_model                  |
+|                 | ln_final                | d_model                                                                        |
+|                 | lm_head                 | d_model * vocab_size                                                           |
+| activations     |                         |                                                                                |
+|                 | transformer_block       | 5 * batch_size * context_length * d_model + 2 * batch_size + context_length**2 |
+|                 | ln_final                | batch_size * context_length * d_model                                          |
+|                 | output_embedding        | batch_size * context_length * vocab_size                                       |
+|                 | cross_entropy_on_logits | batch_size * context_length * vocab_size                                       |
+| gradients       |                         | parameters                                                                     |
+| optimizer state |                         | 2 * parameters                                                                 |
+
+
+###  Instantiate your answer for a GPT-2 XL-shaped model to get an expression that only depends on the batch_size. What is the maximum batch size you can use and still fit within 80GB memory?
+
+memary = 2127057600 * 4 * 4B + batch_size * 3014363136 * 4B
+batch_size = 4
+
+### How many FLOPs does running one step of AdamW take?
+一次step中，总共运行了14*params FLOPs
+
+| step         | FLOPs |
+| ------------ | ----- |
+| 一阶动量更新 | 3     |
+| 二阶动量更新 | 4     |
+| 参数更新     | 5     |
+| 权重衰减     | 2     |
+
+
+### Model FLOPs utilization(MFU) is defined as the ratio of observed throughput(tokens per second) relative to the hardware’s theoretical peak FLOP throughput [Chowdheryet al., 2022]. An NVIDIA A100 GPU has a theoretical peak of 19.5 teraFLOP/s for float32 operations. Assuming you are able to get 50% MFU, how long would it take to train a GPT-2 XL for 400K steps and a batch size of 1024 on a single A100? Following Kaplanetal. [2020] and Hoffmannetal. [2022], assume that the backward pass has twice the FLOPs of the forward pass.
+
+每一步中 前向传播 4.3 quadrillion FLOP；反向传播 8.6 quadrillion；优化计算 29.8 billion
+
+总共需要约6114.6天

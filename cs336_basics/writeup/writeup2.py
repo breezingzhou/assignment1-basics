@@ -1,5 +1,6 @@
 
 # %%
+from abc import abstractmethod, ABC
 from dataclasses import dataclass
 import math
 import humanize
@@ -13,9 +14,65 @@ class LMConfig:
   d_model: int
   num_heads: int
   d_ff: int
+  batch_size: int = 1
+
+  def activation_count_transformer_block(self) -> int:
+    QKV_projections = 3 * self.batch_size * self.context_length * self.d_model
+    QK_matrix_multiply = self.batch_size * self.num_heads * self.context_length * self.context_length
+    softmax = QK_matrix_multiply
+    weighted_sum_of_values = self.batch_size * self.context_length * self.d_model
+    output_projection = self.batch_size * self.context_length * self.d_model
+    return QKV_projections + QK_matrix_multiply + softmax + weighted_sum_of_values + output_projection
+
+  def activation_count_ln_final(self) -> int:
+    return self.batch_size * self.context_length * self.d_model
+
+  def activation_count_output_embedding(self) -> int:
+    return self.batch_size * self.context_length * self.vocab_size
+
+  def activation_count_cross_entropy_on_logits(self) -> int:
+    return self.batch_size * self.context_length * self.vocab_size
+
+  def activation_count_total(self) -> int:
+    return self.activation_count_transformer_block() * self.num_layers + self.activation_count_ln_final() + self.activation_count_output_embedding() + self.activation_count_cross_entropy_on_logits()
+
+  def params_count_token_embedding(self) -> int:
+    return self.vocab_size * self.d_model
+
+  def params_count_transformer_block(self) -> int:
+    attn = 4 * self.d_model * self.d_model
+    ln1 = self.d_model
+    ffn = 3 * self.d_model * self.d_ff
+    ln2 = self.d_model
+    return attn + ln1 + ffn + ln2
+
+  def params_count_ln_final(self) -> int:
+    return self.d_model
+
+  def params_count_lm_head(self) -> int:
+    return self.d_model * self.vocab_size
+
+  def params_count_total(self) -> int:
+    return self.params_count_token_embedding() + self.params_count_transformer_block() * self.num_layers + self.params_count_ln_final() + self.params_count_lm_head()
 
 
-class Linear():
+class Base(ABC):
+  @property
+  @abstractmethod
+  def param_count(self) -> int:
+    pass
+
+  @property
+  @abstractmethod
+  def flops(self) -> int:
+    pass
+
+  @property
+  def activation_count(self) -> int:
+    return 0
+
+
+class Linear(Base):
   def __init__(self, in_features: int, out_features: int, input_shape: list[int]) -> None:
     self.in_features = in_features
     self.out_features = out_features
@@ -29,8 +86,12 @@ class Linear():
   def flops(self) -> int:
     return 2 * math.prod(self.input_shape) * self.out_features
 
+  @property
+  def activation_count(self) -> int:
+    return math.prod(self.input_shape[:-1]) * self.out_features
 
-class Embedding():
+
+class Embedding(Base):
   def __init__(self, num_embeddings: int, embedding_dim: int, input_shape: list[int]) -> None:
     self.num_embeddings = num_embeddings
     self.embedding_dim = embedding_dim
@@ -45,7 +106,7 @@ class Embedding():
     return 0
 
 
-class RMSNorm():
+class RMSNorm(Base):
   def __init__(self, d_model: int, input_shape: list[int]) -> None:
     self.d_model = d_model
     self.input_shape = input_shape
@@ -59,9 +120,16 @@ class RMSNorm():
     prod = math.prod(self.input_shape)
     return 3 * prod
 
+  @property
+  def activation_count(self) -> int:
+    return math.prod(self.input_shape)
 
-class SwiGLU():
+
+class SwiGLU(Base):
   def __init__(self, d_model: int, d_ff: int, input_shape: list[int]) -> None:
+    self.d_model = d_model
+    self.d_ff = d_ff
+    self.input_shape = input_shape
     self.w1 = Linear(d_model, d_ff, input_shape)
     self.w2 = Linear(d_ff, d_model, input_shape[:-1] + [d_ff])
     self.w3 = Linear(d_model, d_ff, input_shape)
@@ -74,8 +142,15 @@ class SwiGLU():
   def flops(self) -> int:
     return self.w1.flops + self.w2.flops + self.w3.flops
 
+  @property
+  def activation_count(self) -> int:
+    w1_matrix_multipl = math.prod(self.input_shape) * self.d_ff // self.d_model
+    silu = w1_matrix_multipl
+    w2_matrix_multipl = math.prod(self.input_shape)
+    return w1_matrix_multipl + silu + w2_matrix_multipl
 
-class RotaryPositionalEmbedding():
+
+class RotaryPositionalEmbedding(Base):
   def __init__(self) -> None:
     pass
 
@@ -88,9 +163,11 @@ class RotaryPositionalEmbedding():
     return 0
 
 
-class MultiHeadSelfAttention():
+class MultiHeadSelfAttention(Base):
   def __init__(self, d_model: int, num_heads: int, input_shape: list[int]) -> None:
     self.d_model = d_model
+    self.num_heads = num_heads
+    self.input_shape = input_shape
     self.rope = RotaryPositionalEmbedding()
     self.q_proj = Linear(d_model, d_model, input_shape)
     self.k_proj = Linear(d_model, d_model, input_shape)
@@ -109,8 +186,23 @@ class MultiHeadSelfAttention():
     scaled_dot_product_attention = 2 * math.prod(self.q_proj.input_shape[:-1]) * self.d_model
     return scaled_dot_product_attention + self.q_proj.flops + self.k_proj.flops + self.v_proj.flops + self.output_proj.flops + self.rope.flops * 2
 
+  @property
+  def activation_count(self) -> int:
+    # input_shape = [batch_size, sequence_length, d_model]
+    # ignore batch_size
+    assert len(self.input_shape) == 2
+    sequence_length, d_model = self.input_shape
+    prod = math.prod(self.input_shape)
+    QKV_projections = 3 * prod
+    # QK_matrix_multiply [batch_size, num_heads, sequence_length, sequence_length]
+    QK_matrix_multiply = self.num_heads * sequence_length * sequence_length
+    softmax = QK_matrix_multiply
+    weighted_sum_of_values = prod
+    output_projection = prod
+    return QKV_projections + QK_matrix_multiply + softmax + weighted_sum_of_values + output_projection
 
-class TransformerBlock():
+
+class TransformerBlock(Base):
   def __init__(self, d_model: int, num_heads: int, d_ff: int, input_shape: list[int]) -> None:
     # input_shape: [sequence_length, d_model]
     self.attn = MultiHeadSelfAttention(d_model, num_heads, input_shape)
@@ -129,7 +221,7 @@ class TransformerBlock():
     return self.attn.flops + self.ln1.flops + self.ffn.flops + self.ln2.flops
 
 
-class TransformerLM():
+class TransformerLM(Base):
   def __init__(self, config: LMConfig) -> None:
     self.token_embedding = Embedding(config.vocab_size, config.d_model,
                                      input_shape=[config.context_length])
@@ -165,7 +257,8 @@ class TransformerLM():
   def flops(self) -> int:
     return (
         self.token_embedding.flops +
-        sum(layer.flops for layer in self.layers) + self.ln_final.flops +
+        sum(layer.flops for layer in self.layers) +
+        self.ln_final.flops +
         self.lm_head.flops
     )
 
@@ -198,11 +291,51 @@ config = LMConfig(
     num_heads=25,
     d_ff=6400,
 )
-lm = TransformerLM(config)
+lm = TransformerLM(config=config)
 
 lm.display_param_count()
 print("")
 lm.display_flops()
+
+# %%
+params_count = config.params_count_total()
+activations_count = config.activation_count_total()
+
+total_memory = 80 * 1024 * 1024 * 1024   # 80 GB
+# 4 bytes per float32
+batch_size = (total_memory / 4 - params_count * 4) // activations_count
+
+print("params_count:", params_count)
+print("activations_count:", activations_count)
+print("batch_size:", batch_size)
+# %%
+special_config = LMConfig(
+    vocab_size=50257,
+    context_length=1024,
+    num_layers=48,
+    d_model=1600,
+    num_heads=25,
+    d_ff=6400,
+    batch_size=1024
+)
+lm = TransformerLM(config=special_config)
+
+param_count = lm.param_count
+forward_flops = lm.flops
+backward_flops = forward_flops * 2
+
+step_floaps = (forward_flops + backward_flops) * special_config.batch_size + param_count * 14
+
+step_num = 400_000
+total_flops = step_floaps * step_num
+A100_peak_flops = 19.5 * 1e12  # 19.5teraFLOP
+mfu = 0.5
+total_seconds = total_flops / (A100_peak_flops * mfu)
+total_days = total_seconds / (3600 * 24)
+print(f"forward in step : {humanize.intword(forward_flops * special_config.batch_size)}")
+print(f"backward in step : {humanize.intword(backward_flops * special_config.batch_size)}")
+print(f"optimizer in step : {humanize.intword(param_count * 14)}")
+print(f"total_days : {total_days}")
 # %%
 small_config = LMConfig(
     vocab_size=50257,
