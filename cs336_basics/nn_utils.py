@@ -1,11 +1,13 @@
 # %%
 from collections.abc import Iterable
-import math
-import torch
-from torch import Tensor
-from jaxtyping import Bool, Float, Int
 from einops import einsum, reduce, rearrange
+import math
+import numpy as np
+import torch
 
+from jaxtyping import Bool, Float, Int
+from torch import LongTensor, Tensor
+import numpy.typing as npt
 # %%
 
 
@@ -104,3 +106,26 @@ def my_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: 
     for p in parameters:
       if p.grad is not None:
         p.grad.data.mul_(clip_coef)
+
+# %%
+
+
+def my_get_batch(dataset: npt.NDArray, batch_size: int, context_length: int, device: str) -> tuple[Tensor, Tensor]:
+  """Given a 1D dataset of token ids, sample a batch of input sequences and corresponding language modeling labels.
+
+    Args:
+        dataset (npt.NDArray): 1D array of token ids representing the dataset.
+        batch_size (int): number of sequences to sample in the batch.
+        context_length (int): length of each input sequence.
+        device (str): device to place the output tensors on.
+
+    Returns:
+        tuple[Tensor, Tensor]: A tuple where the first item is the sampled input sequences, and the second item is the corresponding
+        language modeling labels.
+    """
+
+  data = np.lib.stride_tricks.sliding_window_view(dataset, context_length + 1)
+  choice = np.random.choice(data.shape[0], size=batch_size, replace=False)
+  choosed_data = data[choice]
+  pair = torch.from_numpy(choosed_data).to(device)
+  return pair[::, :-1], pair[:, 1:]

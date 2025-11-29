@@ -204,3 +204,16 @@ max_ = inputs.max(dim=-1, keepdim=True)
 
 logsumexp = torch.log(torch.exp(inputs - max_.values).sum(dim=-1, keepdim=True)) + max_.values
 (inputs - logsumexp)[batch_indices, targets].mean()
+#%%
+import numpy as np
+import torch
+dataset = np.arange(0, 100)
+context_length = 7
+batch_size = 32
+device = "cpu"
+
+data = np.lib.stride_tricks.sliding_window_view(dataset, context_length+1)
+choice = np.random.choice(data.shape[0], size=batch_size, replace=False)
+choosed_data = data[choice]
+r =  torch.from_numpy(choosed_data).to(device)
+r[::, :-1], r[:, 1:]
