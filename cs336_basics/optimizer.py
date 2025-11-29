@@ -40,8 +40,6 @@ class MyAdamW(Optimizer):
                betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-8,):
     defaults = dict(lr=lr, weight_decay=weight_decay, betas=betas, eps=eps)
     super().__init__(params, defaults)
-    self.m = 0.0
-    self.v = 0.0
 
   def step(self, closure: Callable | None = None):
     loss = None if closure is None else closure()
@@ -49,20 +47,27 @@ class MyAdamW(Optimizer):
       lr: float = group["lr"]
       betas: tuple[float, float] = group["betas"]
       eps = group["eps"]
-      weight_decay = group["weight_decay"]
+      weight_decay: float = group["weight_decay"]
+
       for p in group["params"]:
         p: Tensor
         if p.grad is None:
           continue
-        grad = p.grad.data  # Get the gradient of loss with respect to p.
-        self.m = betas[0] * self.m + (1 - betas[0]) * grad  # Update first moment estimate
-        self.v = betas[1] * self.v + (1 - betas[1]) * grad ** 2  # Update second moment estimate
-
         state = self.state[p]  # Get state associated with p.
-        t = state.get("t", 0) + 1  # Get iteration number from the state, or initial value.
+        # Get first moment estimate, or initialize it.
+        m: Tensor = state.get("m", torch.zeros_like(p.data))
+        v: Tensor = state.get("v", torch.zeros_like(p.data))  # Get second moment
+        t = state.get("t", 0)  # Get iteration number from the state, or initial value.
+        t += 1  # Increment iteration number
+
+        grad = p.grad.data  # Get the gradient of loss with respect to p.
+        m = betas[0] * m + (1 - betas[0]) * grad  # Update first moment estimate
+        v = betas[1] * v + (1 - betas[1]) * grad ** 2  # Update second moment estimate
 
         new_lr = lr * math.sqrt(1 - betas[1]**t) / (1 - betas[0] ** t)  # Adjust learning rate
-        p.data -= new_lr * self.m / (torch.sqrt(self.v) + eps)  # Update weight tensor in-place
+        p.data -= new_lr * m / (torch.sqrt(v) + eps)  # Update weight tensor in-place
         p.data -= lr * weight_decay * p.data  # Apply weight decay
-        state["t"] = t  # Increment iteration number
+        state["t"] = t
+        state["m"] = m
+        state["v"] = v
     return loss
