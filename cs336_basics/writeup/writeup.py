@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 
 from train_bpe import train_bpe
-from common import OUTPUT_DIR, DATA_DIR
+from cs336_basics.writeup.common import OUTPUT_DIR, DATA_DIR
 from tests.common import gpt2_bytes_to_unicode
 # %%
 
