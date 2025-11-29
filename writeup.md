@@ -155,3 +155,24 @@ Context Length Model:
 | Final LayerNorm         | 78.6 million  | 1.1725615897746376e-06 |
 | LM Head                 | 2.6 trillion  | 0.03928628521153597    |
 | Total FLOPs             | 67.1 trillion | 1                      |
+
+
+## Problem (learning_rate_tuning): Tuning the learning rate
+###  As we will see, one of the hyperparameters that affects training the most is the learning rate. Let’s see that in practice in our toy example. Run the SGD example above with three other values for the learning rate: 1e1, 1e2, and 1e3, for just 10 training iterations. What happens with the loss for each of these learning rates? Does it decay faster, slower, or does it diverge (i.e., increase over the course of training)?
+
+当lr=1e1时，loss持续下降，
+当lr=1e2时，loss持续下降的更快
+当lr=1e3时，loss持续上升
+
+| lr=10.0            | lr=100.0               | lr=1000.0              |
+| ------------------ | ---------------------- | ---------------------- |
+| 19.13698959350586  | 19.13698959350586      | 19.13698959350586      |
+| 12.247674942016602 | 19.136987686157227     | 6908.45361328125       |
+| 9.028461456298828  | 3.283388376235962      | 1193198.5              |
+| 7.063807964324951  | 0.07857886701822281    | 132730600.0            |
+| 5.721684455871582  | 1.475902765124803e-16  | 10751177728.0          |
+| 4.743931770324707  | 1.6449852362603434e-18 | 678522388480.0         |
+| 4.0008769035339355 | 5.53924405252976e-20   | 34833122197504.0       |
+| 3.418863534927368  | 3.2997658370902017e-21 | 1498669916356608.0     |
+| 2.9524576663970947 | 2.830752258827424e-22  | 5.523777196235162e+16  |
+| 2.5719187259674072 | 3.145280252525542e-23  | 1.7737461767014973e+18 |
