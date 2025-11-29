@@ -10,7 +10,7 @@ from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
 
-from cs336_basics.nn_utils import my_get_batch, my_gradient_clipping, my_scaled_dot_product_attention, my_silu, my_softmax, my_cross_entropy, my_get_lr_cosine_schedule
+from cs336_basics.nn_utils import my_get_batch, my_gradient_clipping, my_load_checkpoint, my_save_checkpoint, my_scaled_dot_product_attention, my_silu, my_softmax, my_cross_entropy, my_get_lr_cosine_schedule
 from cs336_basics.optimizer import MyAdamW
 from cs336_basics.tokenizer import BpeTokenizer
 from cs336_basics.train_bpe import train_bpe
@@ -553,7 +553,7 @@ def run_save_checkpoint(
             we've completed.
         out (str | os.PathLike | BinaryIO | IO[bytes]): Path or file-like object to serialize the model, optimizer, and iteration to.
     """
-    raise NotImplementedError
+    my_save_checkpoint(model, optimizer, iteration, out)
 
 
 def run_load_checkpoint(
@@ -574,7 +574,7 @@ def run_load_checkpoint(
     Returns:
         int: the previously-serialized number of iterations.
     """
-    raise NotImplementedError
+    return my_load_checkpoint(src, model, optimizer)
 
 
 def get_tokenizer(

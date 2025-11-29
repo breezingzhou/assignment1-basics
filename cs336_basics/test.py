@@ -217,3 +217,10 @@ choice = np.random.choice(data.shape[0], size=batch_size, replace=False)
 choosed_data = data[choice]
 r =  torch.from_numpy(choosed_data).to(device)
 r[::, :-1], r[:, 1:]
+#%%
+import torch
+from cs336_basics.optimizer import MyAdamW
+
+model = torch.nn.Linear(10, 2)
+adamw = MyAdamW(model.parameters(), lr=1e-3, weight_decay=0.01, betas=(0.9, 0.999), eps=1e-8)
+adamw.state_dict
