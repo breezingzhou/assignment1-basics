@@ -1,4 +1,5 @@
 # %%
+import math
 import torch
 from torch import Tensor
 from jaxtyping import Bool, Float, Int
@@ -42,14 +43,38 @@ def my_scaled_dot_product_attention(
   return einsum(gate, V, "... queries keys, ... keys d_v -> ... queries d_v")
 
 
-def my_sigmoid(in_features: Float[Tensor, "..."]) -> Float[Tensor,"..."]:
+def my_sigmoid(in_features: Float[Tensor, "..."]) -> Float[Tensor, "..."]:
   """
   sigmoid(x) = 1 / (1 + exp(-x))
   """
   return 1 / (1 + torch.exp(-in_features))
 
-def my_silu(in_features: Float[Tensor, "..."]) -> Float[Tensor,"..."]:
+
+def my_silu(in_features: Float[Tensor, "..."]) -> Float[Tensor, "..."]:
   """
   SiLU(x) = x * sigmoid(x)
   """
   return in_features * my_sigmoid(in_features)
+
+# %%
+
+
+def my_cross_entropy(inputs: Float[Tensor, " batch_size vocab_size"], targets: Int[Tensor, " batch_size"]) -> Float[Tensor, ""]:
+  max_ = inputs.max(dim=-1, keepdim=True).values
+  logsumexp = torch.log(torch.exp(inputs - max_).sum(dim=-1, keepdim=True)) + max_
+  log_probs = inputs - logsumexp
+  batch_indices = torch.arange(inputs.size(0), device=inputs.device)
+  target_log_probs = log_probs[batch_indices, targets]
+  return -target_log_probs.mean()
+
+# %%
+
+
+def my_get_lr_cosine_schedule(it: int, max_learning_rate: float, min_learning_rate: float, warmup_iters: int, cosine_cycle_iters: int) -> float:
+  if it < warmup_iters:
+    return max_learning_rate * it / warmup_iters
+  elif it > cosine_cycle_iters:
+    return min_learning_rate
+  else:
+    cos_inner = math.pi * (it - warmup_iters) / (cosine_cycle_iters - warmup_iters)
+    return min_learning_rate + 0.5 * (1 + math.cos(cos_inner)) * (max_learning_rate - min_learning_rate)
