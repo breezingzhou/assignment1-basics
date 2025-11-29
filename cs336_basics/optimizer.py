@@ -23,7 +23,18 @@ def my_cross_entropy(inputs: Float[Tensor, " batch_size vocab_size"], targets: I
   return -target_log_probs.mean()
 
 
+def my_get_lr_cosine_schedule(it: int, max_learning_rate: float, min_learning_rate: float, warmup_iters: int, cosine_cycle_iters: int) -> float:
+  if it < warmup_iters:
+    return max_learning_rate * it / warmup_iters
+  elif it > cosine_cycle_iters:
+    return min_learning_rate
+  else:
+    cos_inner = math.pi * (it - warmup_iters) / (cosine_cycle_iters - warmup_iters)
+    return min_learning_rate + 0.5 * (1 + math.cos(cos_inner)) * (max_learning_rate - min_learning_rate)
+
 # %%
+
+
 class MySGD(Optimizer):
   def __init__(self, params: ParamsT, lr: float = 1e-3):
     if lr < 0:
