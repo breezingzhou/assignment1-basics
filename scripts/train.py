@@ -10,7 +10,7 @@ import numpy as np
 import json
 import os
 from pathlib import Path
-
+from common import OUTPUT_DIR
 # %%
 
 
@@ -140,7 +140,7 @@ config = TrainConfig(
     module_params=_module_params,
     optimizer_params=_optimizer_params,
     schedule_params=_schedule_params,
-    checkpoint_dir=Path("checkpoints")
+    checkpoint_dir=OUTPUT_DIR / "checkpoints"
 )
 
 # %%
