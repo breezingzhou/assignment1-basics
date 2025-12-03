@@ -24,7 +24,7 @@ class BpeTokenizer:
       self.special_tokens = special_tokens[::]
       self.special_tokens.sort(key=lambda x: len(x), reverse=True)
 
-  @lru_cache(maxsize=10000)
+  @lru_cache(maxsize=None)
   def encode_token(self, token: str) -> list[int]:
     origin = token.encode("utf-8")
     byte_tokens = [origin[i:i + 1] for i in range(len(origin))]
