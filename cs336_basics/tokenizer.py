@@ -24,6 +24,15 @@ class BpeTokenizer:
       self.special_tokens = special_tokens[::]
       self.special_tokens.sort(key=lambda x: len(x), reverse=True)
 
+  @lru_cache(maxsize=10000)
+  def encode_token(self, token: str) -> list[int]:
+    origin = token.encode("utf-8")
+    byte_tokens = [origin[i:i + 1] for i in range(len(origin))]
+    for first, second in self.merges:
+      byte_tokens = merge_tokens(byte_tokens, SimplePair(first, second))
+    token_ids = [self.vocab_rev.get(byte_token, 0) for byte_token in byte_tokens]
+    return token_ids
+
   def encode(self, text: str) -> list[int]:
     res = []
 
@@ -40,15 +49,6 @@ class BpeTokenizer:
         for token in tokens:
           res.extend(self.encode_token(token))
     return res
-
-  @lru_cache(maxsize=10000)
-  def encode_token(self, token: str) -> list[int]:
-    origin = token.encode("utf-8")
-    byte_tokens = [origin[i:i + 1] for i in range(len(origin))]
-    for first, second in self.merges:
-      byte_tokens = merge_tokens(byte_tokens, SimplePair(first, second))
-    token_ids = [self.vocab_rev.get(byte_token, 0) for byte_token in byte_tokens]
-    return token_ids
 
   def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
     for item in iterable:
