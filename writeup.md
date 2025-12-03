@@ -70,7 +70,9 @@ BPE Training最耗时的部分是 选择出现频率最高的pair  (max函数)
   * d_model : 1,600
   * num_heads : 25
   * d_ff : 6,400
-总共需要约2.12b的参数,需要内存68GB
+
+总共需要约2.12b的参数,需要内存7.9GB<br>
+
 | Part                    | params_num |
 | ----------------------- | ---------- |
 | Token Embedding         | 80411200   |
@@ -188,26 +190,27 @@ Context Length Model:
 - cross-entropy on logits
 
 运行AdamW的峰值内存分布
-| Component       | Part                    | expresion                                                                      |
-| --------------- | ----------------------- | ------------------------------------------------------------------------------ |
-| parameters      |                         |                                                                                |
-|                 | token_embedding         | vocab_size * d_model                                                           |
-|                 | transformer_block       | 4 * d_model * d_model +      3 * d_model * d_ff + 2 * d_model                  |
-|                 | ln_final                | d_model                                                                        |
-|                 | lm_head                 | d_model * vocab_size                                                           |
-| activations     |                         |                                                                                |
-|                 | transformer_block       | 5 * batch_size * context_length * d_model + 2 * batch_size + context_length**2 |
-|                 | ln_final                | batch_size * context_length * d_model                                          |
-|                 | output_embedding        | batch_size * context_length * vocab_size                                       |
-|                 | cross_entropy_on_logits | batch_size * context_length * vocab_size                                       |
-| gradients       |                         | parameters                                                                     |
-| optimizer state |                         | 2 * parameters                                                                 |
+| Component       | Part                    | expresion                                                                                   |
+| --------------- | ----------------------- | ------------------------------------------------------------------------------------------- |
+| parameters      |                         |                                                                                             |
+|                 | token_embedding         | vocab_size * d_model                                                                        |
+|                 | transformer_block       | 4 * d_model * d_model +      3 * d_model * d_ff + 2 * d_model                               |
+|                 | ln_final                | d_model                                                                                     |
+|                 | lm_head                 | d_model * vocab_size                                                                        |
+| activations     |                         |                                                                                             |
+|                 | transformer_block       | 16 * batch_size * context_length * d_model + 2 * num_heads * batch_size * context_length**2 |
+|                 | ln_final                | batch_size * context_length * d_model                                                       |
+|                 | output_embedding        | batch_size * context_length * vocab_size                                                    |
+|                 | cross_entropy_on_logits | batch_size * context_length * vocab_size                                                    |
+| gradients       |                         | parameters                                                                                  |
+| optimizer state |                         | 2 * parameters                                                                              |
 
 
 ###  Instantiate your answer for a GPT-2 XL-shaped model to get an expression that only depends on the batch_size. What is the maximum batch size you can use and still fit within 80GB memory?
 
-memary = 2127057600 * 4 * 4B + batch_size * 3014363136 * 4B
-batch_size = 4
+memory = 2127057600 * 4 * 4B + batch_size * 3827976192 * 4B<br>
+memory = 31.7GiB + batch_size * 14.3GiB<br>
+batch_size = 3
 
 ### How many FLOPs does running one step of AdamW take?
 一次step中，总共运行了14*params FLOPs
