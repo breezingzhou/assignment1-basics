@@ -157,7 +157,9 @@ class MyRotaryPositionalEmbedding(Module):
     return rot_matrix
 
   def forward(self, x: Float[Tensor, "... sequence_length d_k"], token_positions: Int[Tensor, "... sequence_length"]) -> Float[Tensor, " ... sequence_length d_k"]:
-    return einsum(x, self.rot_matrix[token_positions], "... sequence_length d_k2 , ... sequence_length d_k1 d_k2   -> ... sequence_length d_k1") # type: ignore
+    res = einsum(x, self.rot_matrix[token_positions],  # type: ignore
+                 "... sequence_length d_k2 , ... sequence_length d_k1 d_k2   -> ... sequence_length d_k1")
+    return res
 
 
 class MyMultiHeadSelfAttention(Module):
@@ -224,11 +226,10 @@ class MyMultiHeadSelfAttention(Module):
 
 
 class MyTransformerBlock(Module):
-  def __init__(self, d_model: int, num_heads: int, d_ff: int, max_seq_len: int, theta: float, device: torch.device | None = None, dtype: torch.dtype | None = None):
+  def __init__(self, d_model: int, num_heads: int, d_ff: int, rope: MyRotaryPositionalEmbedding, device: torch.device | None = None, dtype: torch.dtype | None = None):
     super().__init__()
-    self.rope = MyRotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len, device=device)
     self.attn = MyMultiHeadSelfAttention(
-        d_model, num_heads, rope=self.rope, device=device, dtype=dtype)
+        d_model, num_heads, rope=rope, device=device, dtype=dtype)
     self.ln1 = MyRMSNorm(d_model, device=device, dtype=dtype)
     self.ffn = MySwiGLU(d_model, d_ff, device=device, dtype=dtype)
     self.ln2 = MyRMSNorm(d_model, device=device, dtype=dtype)
@@ -243,10 +244,12 @@ class MyTransformerLM(Module):
 
   def __init__(self, vocab_size: int, context_length: int, d_model: int, num_layers: int, num_heads: int, d_ff: int, rope_theta: float, device: torch.device | None = None, dtype: torch.dtype | None = None):
     super().__init__()
+    self.rope = MyRotaryPositionalEmbedding(rope_theta, d_model // num_heads, context_length)
+
     self.token_embeddings = MyEmbedding(vocab_size, d_model, device=device, dtype=dtype)
     self.layers = torch.nn.ModuleList(
-        [MyTransformerBlock(d_model, num_heads, d_ff, context_length, rope_theta,
-                            device=device, dtype=dtype) for _ in range(num_layers)]
+        [MyTransformerBlock(d_model, num_heads, d_ff, self.rope, device=device,
+                            dtype=dtype) for _ in range(num_layers)]
     )
     self.ln_final = MyRMSNorm(d_model, device=device, dtype=dtype)
     self.lm_head = MyLinear(d_model, vocab_size, device=device, dtype=dtype)
