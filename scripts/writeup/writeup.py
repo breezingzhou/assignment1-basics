@@ -51,8 +51,8 @@ def TinyStoriesV2():
   num_chunks = 32
   num_processes = 8
 
-  vocab_path = OUTPUT_DIR / "TinyStoriesV2_vocab.json"
-  merges_path = OUTPUT_DIR / "TinyStoriesV2_merges.txt"
+  vocab_path = OUTPUT_DIR / "TinyStoriesV2-GPT4_vocab.json"
+  merges_path = OUTPUT_DIR / "TinyStoriesV2-GPT4_merges.txt"
   # %%
   vocab, merges = train_bpe(input_file, vocab_size, special_tokens, num_chunks=num_chunks,
                             num_processes=num_processes)
