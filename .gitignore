@@ -166,3 +166,4 @@ cython_debug/
 .vscode
 output/*.npy
 /checkpoints
+scripts/wandb

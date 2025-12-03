@@ -22,7 +22,12 @@ class LMConfig:
     softmax = QK_matrix_multiply
     weighted_sum_of_values = self.batch_size * self.context_length * self.d_model
     output_projection = self.batch_size * self.context_length * self.d_model
-    return QKV_projections + QK_matrix_multiply + softmax + weighted_sum_of_values + output_projection
+
+    attn = QKV_projections + QK_matrix_multiply + softmax + weighted_sum_of_values + output_projection
+    ln = 2 * self.batch_size * self.context_length * self.d_model
+    ffn = (self.batch_size * self.context_length * self.d_model) + \
+        2 * (self.batch_size * self.context_length * self.d_ff)
+    return attn + ln + ffn
 
   def activation_count_ln_final(self) -> int:
     return self.batch_size * self.context_length * self.d_model
@@ -31,7 +36,7 @@ class LMConfig:
     return self.batch_size * self.context_length * self.vocab_size
 
   def activation_count_cross_entropy_on_logits(self) -> int:
-    return self.batch_size * self.context_length * self.vocab_size
+    return self.batch_size * self.context_length
 
   def activation_count_total(self) -> int:
     return self.activation_count_transformer_block() * self.num_layers + self.activation_count_ln_final() + self.activation_count_output_embedding() + self.activation_count_cross_entropy_on_logits()
@@ -224,15 +229,16 @@ class TransformerBlock(Base):
 class TransformerLM(Base):
   def __init__(self, config: LMConfig) -> None:
     self.token_embedding = Embedding(config.vocab_size, config.d_model,
-                                     input_shape=[config.context_length])
+                                     input_shape=[config.batch_size, config.context_length])
     self.layers = [
         TransformerBlock(config.d_model, config.num_heads, config.d_ff,
-                         input_shape=[config.context_length, config.d_model])
+                         input_shape=[config.batch_size, config.context_length, config.d_model])
         for _ in range(config.num_layers)
     ]
-    self.ln_final = RMSNorm(config.d_model, input_shape=[config.context_length, config.d_model])
+    self.ln_final = RMSNorm(config.d_model, input_shape=[
+                            config.batch_size, config.context_length, config.d_model])
     self.lm_head = Linear(config.d_model, config.vocab_size, input_shape=[
-                          config.context_length, config.d_model])
+                          config.batch_size, config.context_length, config.d_model])
 
   @property
   def param_count(self) -> int:
@@ -281,6 +287,24 @@ class TransformerLM(Base):
     print(f"| LM Head | {humanize.intword(lm_head)} | {lm_head / total_flops} |")
     print(f"| Total FLOPs | {humanize.intword(total_flops)} | 1 |")
 
+
+# %%
+config = LMConfig(
+    vocab_size=10000,
+    context_length=256,
+    d_model=512,
+    d_ff=1344,
+    num_layers=4,
+    num_heads=16,
+    batch_size=32
+)
+lm = TransformerLM(config=config)
+print("param")
+lm.display_param_count()
+print("flops")
+lm.display_flops()
+print("activation count")
+config.activation_count_total()
 
 # %%
 config = LMConfig(

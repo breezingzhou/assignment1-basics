@@ -113,6 +113,7 @@ class MySwiGLU(Module):
     """
     FFN(x) = SwiGLU(x,W1,W2,W3) = W2(SiLU(W1x)⊙W3x)
     """
+    # TODO silu
     return self.w2(einsum(SiLU()(self.w1(x)), self.w3(x), "... d_ff, ... d_ff -> ... d_ff"))
 
 
