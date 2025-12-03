@@ -64,13 +64,12 @@ def my_silu(in_features: Float[Tensor, "..."]) -> Float[Tensor, "..."]:
 # %%
 
 
-def my_cross_entropy(inputs: Float[Tensor, " batch_size vocab_size"], targets: Int[Tensor, " batch_size"]) -> Float[Tensor, ""]:
+def my_cross_entropy(inputs: Float[Tensor, " ... vocab_size"], targets: Int[Tensor, " ..."]) -> Float[Tensor, ""]:
   max_ = inputs.max(dim=-1, keepdim=True).values
   logsumexp = torch.log(torch.exp(inputs - max_).sum(dim=-1, keepdim=True)) + max_
   log_probs = inputs - logsumexp
-  batch_indices = torch.arange(inputs.size(0), device=inputs.device)
-  target_log_probs = log_probs[batch_indices, targets]
-  return -target_log_probs.mean()
+  target_log_probs = torch.gather(log_probs, dim=-1, index=targets.unsqueeze(-1))
+  return -target_log_probs.squeeze(-1).mean()
 
 # %%
 
@@ -129,7 +128,7 @@ def my_get_batch(dataset: npt.NDArray, batch_size: int, context_length: int, dev
   data = np.lib.stride_tricks.sliding_window_view(dataset, context_length + 1)
   choice = np.random.choice(data.shape[0], size=batch_size, replace=False)
   choosed_data = data[choice]
-  pair = torch.from_numpy(choosed_data).to(device)
+  pair = torch.from_numpy(choosed_data).to(device, dtype=torch.int64)
   return pair[::, :-1], pair[:, 1:]
 
 # %%

@@ -124,8 +124,8 @@ class MyRotaryPositionalEmbedding(Module):
     self.d_k = d_k
     self.max_seq_len = max_seq_len
 
-    self.rot_matrix = self.create_rot_matrix(theta, d_k, max_seq_len, device)
-    self.register_buffer("my_rot_matrix", self.rot_matrix, persistent=False)
+    rot_matrix = self.create_rot_matrix(theta, d_k, max_seq_len, device)
+    self.register_buffer("rot_matrix", rot_matrix, persistent=False)
 
   def create_rot_matrix(self, theta: float, d_k: int, max_seq_len: int, device: torch.device | None = None) -> Tensor:
     """
@@ -157,7 +157,7 @@ class MyRotaryPositionalEmbedding(Module):
     return rot_matrix
 
   def forward(self, x: Float[Tensor, "... sequence_length d_k"], token_positions: Int[Tensor, "... sequence_length"]) -> Float[Tensor, " ... sequence_length d_k"]:
-    return einsum(x, self.rot_matrix[token_positions], "... sequence_length d_k2 , ... sequence_length d_k1 d_k2   -> ... sequence_length d_k1")
+    return einsum(x, self.rot_matrix[token_positions], "... sequence_length d_k2 , ... sequence_length d_k1 d_k2   -> ... sequence_length d_k1") # type: ignore
 
 
 class MyMultiHeadSelfAttention(Module):
@@ -173,7 +173,6 @@ class MyMultiHeadSelfAttention(Module):
     super().__init__()
     self.d_model = d_model
     self.num_heads = num_heads
-    self.device = device
     self.rope = rope
 
     self.d_k = d_model // num_heads
@@ -191,8 +190,8 @@ class MyMultiHeadSelfAttention(Module):
     self.v_proj.reset_parameters()
     self.output_proj.reset_parameters()
 
-  def _create_look_ahead_mask(self, seq_len: int) -> Bool[Tensor, " ... sequence_length sequence_length"]:
-    mask = torch.tril(torch.ones((seq_len, seq_len), device=self.device)).bool()
+  def _create_look_ahead_mask(self, seq_len: int, device: torch.device) -> Bool[Tensor, " ... sequence_length sequence_length"]:
+    mask = torch.tril(torch.ones((seq_len, seq_len), device=device)).bool()
     return mask
 
   def forward(self, in_features: Float[Tensor, " ... sequence_length d_in"], token_positions: Int[Tensor, " ... sequence_length"] | None = None) -> Float[Tensor, " ... sequence_length d_out"]:
@@ -217,7 +216,7 @@ class MyMultiHeadSelfAttention(Module):
       Q = self.rope(Q, token_positions)
       K = self.rope(K, token_positions)
 
-    mask = self._create_look_ahead_mask(seq_len)
+    mask = self._create_look_ahead_mask(seq_len, in_features.device)
     output = my_scaled_dot_product_attention(Q, K, V, mask)
     output = rearrange(output, '... h s d_v -> ... s (h d_v)')
 

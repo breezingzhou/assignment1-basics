@@ -9,8 +9,9 @@ import torch
 import numpy as np
 import json
 import os
+from datetime import datetime
 from pathlib import Path
-from common import OUTPUT_DIR
+from common import OUTPUT_DIR, CHECKPOINTS_DIR
 # %%
 
 
@@ -48,8 +49,8 @@ class TrainConfig:
 
   checkpoint_dir: Path
 
-  num_epochs: int = 10
-  batch_size: int = 64
+  num_epochs: int
+  batch_size: int
 
   max_l2_norm: float = 1e-2
 
@@ -57,16 +58,20 @@ class TrainConfig:
 # %%# %%
 
 
-def load_data(data_path: str) -> np.ndarray:
+def load_data(data_path: Path) -> np.ndarray:
   # TODO verify dtype based on tokenizer vocab size
   data = np.memmap(data_path, dtype=np.int32, mode="r")
   return data
 
 
+def prepare(config: TrainConfig):
+  config.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+
 def train_model(
     model: MyTransformerLM,
     optimizer: MyAdamW,
-    sechdule: MyCosineAnnealingLR,
+    sechdule: MyCosineAnnealingLR | None,
     train_data: np.ndarray,
     val_data: np.ndarray,
     config: TrainConfig,
@@ -79,35 +84,33 @@ def train_model(
 
   for epoch in range(config.num_epochs):
     print(f"Starting epoch {epoch + 1}/{config.num_epochs}")
+    optimizer.zero_grad()
 
-    steps = (len(train_data) - config.module_params.context_length) // config.batch_size
-    steps = int(steps * 0.9)
-    # Training loop
-    for step_id in range(steps):
-      optimizer.zero_grad()
+    x, y = my_get_batch(train_data, config.batch_size,
+                        config.module_params.context_length, device)
 
-      x, y = my_get_batch(train_data, config.batch_size,
-                          config.module_params.context_length, device)
+    logits = model(x)
+    loss = my_cross_entropy(logits, y)
 
-      logits = model(x)
-      loss = my_cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+    loss.backward()
+    my_gradient_clipping(model.parameters(), config.max_l2_norm)
 
-      loss.backward()
-      my_gradient_clipping(model.parameters(), config.max_l2_norm)
-
-      optimizer.step()
+    optimizer.step()
+    if sechdule:
       sechdule.step()
 
-      iteration += 1
-      if iteration % 100 == 0:
-        print(
-            f"Iteration {iteration}, Loss: {loss.item():.4f}, LR: {sechdule.get_last_lr()[0]:.6f}")
+    iteration += 1
+    if iteration % 100 == 0:
+      log_str = f"Iteration {iteration}, Loss: {loss.item():.4f}"
+      if sechdule:
+        log_str += f", LR: {sechdule.get_last_lr()[0]:.6f}"
+      print(log_str)
 
-      # Save checkpoint periodically
-      if iteration % 1000 == 0:
-        checkpoint_path = config.checkpoint_dir / f"checkpoint_iter_{iteration}.pth"
-        my_save_checkpoint(model, optimizer, iteration, checkpoint_path)
-        print(f"Checkpoint saved at iteration {iteration}")
+    # Save checkpoint periodically
+    if iteration % 1000 == 0:
+      checkpoint_path = config.checkpoint_dir / f"checkpoint_iter_{iteration}.pth"
+      my_save_checkpoint(model, optimizer, iteration, checkpoint_path)
+      print(f"Checkpoint saved at iteration {iteration}")
 
   # Final checkpoint
   my_save_checkpoint(model, optimizer, iteration, config.checkpoint_dir / "checkpoint_final.pth")
@@ -117,12 +120,12 @@ def train_model(
 # %%
 
 _module_params = ModelHyperParams(
-    vocab_size=100,
-    context_length=16,
+    vocab_size=10000,
+    context_length=32,
     d_model=32,
     num_layers=2,
     num_heads=4,
-    d_ff=64,
+    d_ff=128,
     rope_theta=10000.0
 )
 _optimizer_params = OptimizerHyperParams(
@@ -140,7 +143,9 @@ config = TrainConfig(
     module_params=_module_params,
     optimizer_params=_optimizer_params,
     schedule_params=_schedule_params,
-    checkpoint_dir=OUTPUT_DIR / "checkpoints"
+    checkpoint_dir=CHECKPOINTS_DIR / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+    num_epochs=10,
+    batch_size=64
 )
 
 # %%
@@ -167,3 +172,6 @@ sechdule = MyCosineAnnealingLR(
     min_lr=config.optimizer_params.learning_rate * config.schedule_params.min_lr_coeff
 )
 # %%
+train_data = load_data(OUTPUT_DIR / "TinyStoriesV2-GPT4-valid.npy")
+prepare(config)
+train_model(model, optimizer, None, train_data, train_data, config)
