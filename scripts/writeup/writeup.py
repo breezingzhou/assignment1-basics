@@ -66,15 +66,16 @@ def owt():
   vocab_size = 32000
   special_tokens = ["<|endoftext|>"]
   num_chunks = 128
-  num_processes = 16
+  num_processes = 8
 
   vocab_path = OUTPUT_DIR / "owt_vocab.json"
   merges_path = OUTPUT_DIR / "owt_merges.txt"
   vocab, merges = train_bpe(input_file, vocab_size, special_tokens, num_chunks=num_chunks,
                             num_processes=num_processes)
-  # save_result(vocab, merges, vocab_path, merges_path)
+  save_result(vocab, merges, vocab_path, merges_path)
   # get_longest_token(vocab_path)
 
 
 # %%
-TinyStoriesV2()
+# TinyStoriesV2()
+# owt()
