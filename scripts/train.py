@@ -5,14 +5,13 @@ from cs336_basics.model import MyTransformerLM
 from cs336_basics.optimizer import MyAdamW, MyCosineAnnealingLR
 from cs336_basics.nn_utils import my_cross_entropy, my_get_batch, my_save_checkpoint, my_load_checkpoint, my_get_lr_cosine_schedule, my_gradient_clipping
 from cs336_basics.tokenizer import BpeTokenizer
+from tests.test_tokenizer import get_tokenizer_from_vocab_merges_path
 import torch
 import numpy as np
-import json
-import os
 import wandb
 from datetime import datetime
 from pathlib import Path
-from common import OUTPUT_DIR, CHECKPOINTS_DIR, get_tokenizer_from_vocab_merges_path
+from common import OUTPUT_DIR, CHECKPOINTS_DIR
 # %%
 
 

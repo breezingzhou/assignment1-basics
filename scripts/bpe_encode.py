@@ -7,10 +7,10 @@ from collections.abc import Generator
 import time
 from cs336_basics.pretokenization_example import find_chunk_boundaries
 from cs336_basics.tokenizer import BpeTokenizer
-from common import OUTPUT_DIR, DATA_DIR, get_tokenizer_from_vocab_merges_path
+from tests.test_tokenizer import get_tokenizer_from_vocab_merges_path
+from common import OUTPUT_DIR, DATA_DIR
 from pathlib import Path
 import numpy as np
-import json
 import math
 # %%
 
