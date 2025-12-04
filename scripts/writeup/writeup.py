@@ -14,7 +14,7 @@ from tests.common import gpt2_bytes_to_unicode
 def save_result(vocab: dict[int, bytes], merges: list[tuple[bytes, bytes]], vocab_path: Path, merges_path: Path):
   gpt2_byte_encoder = gpt2_bytes_to_unicode()
   vocab_display = {
-      index: ''.join([gpt2_byte_encoder[b] for b in token]) for index, token in vocab.items()
+      ''.join([gpt2_byte_encoder[b] for b in token]): index for index, token in vocab.items()
   }
   merges_display = [(''.join([gpt2_byte_encoder[b] for b in m1]),
                     ''.join([gpt2_byte_encoder[b] for b in m2])) for m1, m2 in merges]
@@ -53,7 +53,6 @@ def TinyStoriesV2():
 
   vocab_path = OUTPUT_DIR / "TinyStoriesV2-GPT4_vocab.json"
   merges_path = OUTPUT_DIR / "TinyStoriesV2-GPT4_merges.txt"
-  # %%
   vocab, merges = train_bpe(input_file, vocab_size, special_tokens, num_chunks=num_chunks,
                             num_processes=num_processes)
   # save_result(vocab, merges, vocab_path, merges_path)
