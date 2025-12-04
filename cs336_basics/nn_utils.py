@@ -124,12 +124,11 @@ def my_get_batch(dataset: npt.NDArray, batch_size: int, context_length: int, dev
         tuple[Tensor, Tensor]: A tuple where the first item is the sampled input sequences, and the second item is the corresponding
         language modeling labels.
     """
-
-  data = np.lib.stride_tricks.sliding_window_view(dataset, context_length + 1)
-  choice = np.random.choice(data.shape[0], size=batch_size, replace=False)
-  choosed_data = data[choice]
-  pair = torch.from_numpy(choosed_data).to(device, dtype=torch.int64)
-  return pair[::, :-1], pair[:, 1:]
+  max_index = dataset.shape[0] - context_length - 1
+  indices = np.random.choice(max_index + 1, size=batch_size)
+  pair_ndarray = np.array([dataset[i:i + context_length + 1] for i in indices])
+  pair = torch.from_numpy(pair_ndarray).to(device, dtype=torch.int64)
+  return pair[::, :-1], pair[::, 1:]
 
 # %%
 

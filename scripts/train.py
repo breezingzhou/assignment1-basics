@@ -61,6 +61,15 @@ class TrainConfig:
 # %%# %%
 
 
+def sumary_model(config: TrainConfig):
+  from torchinfo import summary
+  model, _, _ = create_from_config(config)
+  train_data = load_data(OUTPUT_DIR / "TinyStoriesV2-GPT4-train.npy")
+  x, y = my_get_batch(train_data, config.batch_size,
+                      config.module_params.context_length, device='cpu')
+  print(summary(model, input_data=x, verbose=0))
+
+
 def load_data(data_path: Path) -> np.ndarray:
   # TODO verify dtype based on tokenizer vocab size
   data = np.memmap(data_path, dtype=np.int32, mode="r")
@@ -115,22 +124,27 @@ def train_model(
     for epoch in range(config.num_epochs):
       print(f"Starting epoch {epoch + 1}/{config.num_epochs}")
       optimizer.zero_grad()
+      # start_time = datetime.now()
 
       x, y = my_get_batch(train_data, config.batch_size,
                           config.module_params.context_length, device)
-
+      # print(f"[{datetime.now() - start_time}] Data loaded ")
       logits = model(x)
+      # print(f"[{datetime.now() - start_time}] Forward pass completed ")
       loss = my_cross_entropy(logits, y)
-      print(f"memory_allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
-      print(f"memory_reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
+      # print(f"[{datetime.now() - start_time}] Loss computed ")
+      # print(f"memory_allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+      # print(f"memory_reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
       loss.backward()
+      # print(f"[{datetime.now() - start_time}] Backward pass completed ")
       my_gradient_clipping(model.parameters(), config.max_l2_norm)
 
       optimizer.step()
+      # print(f"[{datetime.now() - start_time}] Optimizer step completed ")
       if sechdule:
         sechdule.step()
 
-      run.log({"loss": loss.item()}, step=epoch)
+      run.log({"train_loss": loss.item()}, step=epoch)
 
       # Save checkpoint periodically
       if epoch % 1000 == 0:
@@ -173,7 +187,7 @@ config = TrainConfig(
     checkpoint_dir=CHECKPOINTS_DIR / _name,
     # num_epochs=40000, # 20倍参数量 / content_length / batch_size
     # num_epochs=66068, # 实际语料tokens数量 / content_length / batch_size
-    num_epochs=10,
+    num_epochs=40000,
     batch_size=32,
     project_name="TinyStoriesV2-GPT4",
     name=_name
@@ -184,18 +198,8 @@ model, optimizer, sechdule = create_from_config(config)
 train_data = load_data(OUTPUT_DIR / "TinyStoriesV2-GPT4-train.npy")
 # val_data = load_data(OUTPUT_DIR / "TinyStoriesV2-GPT4-valid.npy")
 prepare(config)
-torch.cuda.memory._record_memory_history()
+# torch.cuda.memory._record_memory_history()
 train_model(model, optimizer, None, train_data, train_data, config)
-torch.cuda.memory._dump_snapshot("my_snapshot.pickle")
+# torch.cuda.memory._dump_snapshot("my_snapshot.pickle")
 
 # %%
-train_data = load_data(OUTPUT_DIR / "TinyStoriesV2-GPT4-train.npy")
-
-data = np.lib.stride_tricks.sliding_window_view(train_data, config.module_params.context_length + 1)
-x, y = my_get_batch(train_data, config.batch_size,
-                    config.module_params.context_length, device='cpu')
-
-
-# %%
-from torchinfo import summary
-summary(model, input_data=x, verbose=0)
