@@ -111,7 +111,7 @@ def my_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: 
 # %%
 
 
-def my_get_batch(dataset: npt.NDArray, batch_size: int, context_length: int, device: str) -> tuple[Tensor, Tensor]:
+def my_get_batch(dataset: npt.NDArray, batch_size: int, context_length: int, device: str, seed: int | None = None) -> tuple[Tensor, Tensor]:
   """Given a 1D dataset of token ids, sample a batch of input sequences and corresponding language modeling labels.
 
     Args:
@@ -124,6 +124,8 @@ def my_get_batch(dataset: npt.NDArray, batch_size: int, context_length: int, dev
         tuple[Tensor, Tensor]: A tuple where the first item is the sampled input sequences, and the second item is the corresponding
         language modeling labels.
     """
+  if seed is not None:
+    np.random.seed(seed)
   max_index = dataset.shape[0] - context_length - 1
   indices = np.random.choice(max_index + 1, size=batch_size)
   pair_ndarray = np.array([dataset[i:i + context_length + 1] for i in indices])

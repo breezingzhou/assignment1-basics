@@ -12,7 +12,7 @@ import os
 import wandb
 from datetime import datetime
 from pathlib import Path
-from common import OUTPUT_DIR, CHECKPOINTS_DIR
+from common import OUTPUT_DIR, CHECKPOINTS_DIR, get_tokenizer_from_vocab_merges_path
 # %%
 
 
@@ -49,7 +49,7 @@ class TrainConfig:
   schedule_params: SechduleParams
 
   checkpoint_dir: Path
-  num_epochs: int
+  train_epochs: int
   batch_size: int
   project_name: str
   name: str
@@ -121,8 +121,8 @@ def train_model(
   model.train()
 
   with wandb.init(project=config.project_name, config=asdict(config), name=config.name) as run:
-    for epoch in range(config.num_epochs):
-      print(f"Starting epoch {epoch + 1}/{config.num_epochs}")
+    for epoch in range(config.train_epochs):
+      print(f"Starting epoch {epoch + 1}/{config.train_epochs}")
       optimizer.zero_grad()
       # start_time = datetime.now()
 
@@ -153,7 +153,7 @@ def train_model(
         print(f"Checkpoint saved at iteration {epoch}")
 
   # Final checkpoint
-  my_save_checkpoint(model, optimizer, config.num_epochs,
+  my_save_checkpoint(model, optimizer, config.train_epochs,
                      config.checkpoint_dir / "checkpoint_final.pth")
   print("Training completed")
 
@@ -187,19 +187,92 @@ config = TrainConfig(
     checkpoint_dir=CHECKPOINTS_DIR / _name,
     # num_epochs=40000, # 20倍参数量 / content_length / batch_size
     # num_epochs=66068, # 实际语料tokens数量 / content_length / batch_size
-    num_epochs=40000,
+    train_epochs=40000,
     batch_size=32,
     project_name="TinyStoriesV2-GPT4",
     name=_name
 )
-model, optimizer, sechdule = create_from_config(config)
 
 # %%
-train_data = load_data(OUTPUT_DIR / "TinyStoriesV2-GPT4-train.npy")
-# val_data = load_data(OUTPUT_DIR / "TinyStoriesV2-GPT4-valid.npy")
-prepare(config)
-# torch.cuda.memory._record_memory_history()
-train_model(model, optimizer, None, train_data, train_data, config)
-# torch.cuda.memory._dump_snapshot("my_snapshot.pickle")
+
+
+def train():
+  model, optimizer, sechdule = create_from_config(config)
+
+  train_data = load_data(OUTPUT_DIR / "TinyStoriesV2-GPT4-train.npy")
+  # val_data = load_data(data_path=OUTPUT_DIR / "TinyStoriesV2-GPT4-valid.npy")
+  prepare(config)
+  # torch.cuda.memory._record_memory_history()
+  train_model(model, optimizer, None, train_data, train_data, config)
+  # torch.cuda.memory._dump_snapshot("my_snapshot.pickle")
 
 # %%
+
+
+def validate_model(
+    checkpoint_path: Path,
+    val_data: np.ndarray,
+    config: TrainConfig,
+    device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
+):
+  model, optimizer, _ = create_from_config(config)
+  iteration = my_load_checkpoint(checkpoint_path, model, optimizer)
+  print(f"Model loaded from checkpoint at iteration {iteration}")
+  model.to(device)
+  model.eval()
+
+  eval_epochs = 100
+
+  with torch.no_grad():
+    losses = []
+    for epoch in range(eval_epochs):
+      x, y = my_get_batch(val_data, config.batch_size,
+                          config.module_params.context_length, device, seed=epoch)
+      logits = model(x)
+      loss = my_cross_entropy(logits, y)
+      losses.append(loss.item())
+
+    print(f"Validation loss: {sum(losses) / len(losses):.4f}")
+
+
+# %%
+# val_data = load_data(data_path=OUTPUT_DIR / "TinyStoriesV2-GPT4-valid.npy")
+# checkpoint_path = CHECKPOINTS_DIR / "20251204_183731" / "checkpoint_final.pth"
+# validate_model(checkpoint_path, val_data, config)
+
+# %%
+def inference():
+  pass
+
+
+dataset_name = "TinyStoriesV2-GPT4"
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+checkpoint_path = CHECKPOINTS_DIR / "20251204_183731" / "checkpoint_final.pth"
+inference_num = 100
+tokenizer: BpeTokenizer = get_tokenizer_from_vocab_merges_path(
+    OUTPUT_DIR / f"{dataset_name}_vocab.json",
+    OUTPUT_DIR / f"{dataset_name}_merges.txt",
+    special_tokens=["<|endoftext|>"]
+)
+
+model, optimizer, _ = create_from_config(config)
+iteration = my_load_checkpoint(checkpoint_path, model, optimizer)
+
+input_str = "Tom and Lily were playing with their toys in the living room. They liked to build towers and bridges with their blocks and cars."
+input_tokens = tokenizer.encode(input_str)
+input_tensor = torch.tensor(input_tokens, dtype=torch.int64, device=device)
+model.to(device)
+model.eval()
+with torch.no_grad():
+  for _ in range(inference_num):
+    logits = model(input_tensor)
+    predicted_tokens = torch.argmax(logits, dim=-1).squeeze()
+    input_tensor = torch.cat((input_tensor, predicted_tokens[-1:]), dim=0)  # Shift input for next prediction
+
+predicted_ids = input_tensor.tolist()
+print(f"Predicted token IDs: {predicted_ids}")
+predicted_text = tokenizer.decode(predicted_ids)
+print(f"Input: {input_str}")
+print(f"Predicted: {predicted_text}")
+
+#%%

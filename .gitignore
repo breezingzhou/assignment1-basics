@@ -167,3 +167,4 @@ cython_debug/
 output/*.npy
 /checkpoints
 scripts/wandb
+wandb
