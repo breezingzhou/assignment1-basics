@@ -12,7 +12,7 @@ import wandb
 import sys
 from datetime import datetime
 from pathlib import Path
-from common import OUTPUT_DIR, WORKSPACE, CHECKPOINT_FINAL_NAME, ClippingParams, ModelHyperParams, OptimizerHyperParams, SechduleParams, ExperimentConfig, save_config, load_config
+from common import CONFIG_DIR, OUTPUT_DIR, WORKSPACE, CHECKPOINT_FINAL_NAME, ClippingParams, ModelHyperParams, OptimizerHyperParams, SechduleParams, ExperimentConfig, save_config, load_config
 # %%
 
 
@@ -55,6 +55,7 @@ def train_prepare(config: ExperimentConfig, model: MyTransformerLM, optimizer: M
       config.run_id is not None), "run_id should be set only if training is resumed"
 
   if last_checkpoint:
+    print(f"Resuming from checkpoint: {last_checkpoint}")
     last_epoch = my_load_checkpoint(last_checkpoint, model, optimizer)
     config.train_start_epoch = last_epoch
     if sechdule:
@@ -100,6 +101,7 @@ def train_model(
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 ):
   model.to(device)
+  optimizer.to(device)
   model.train()
 
   with wandb.init(project=config.dataset_name, config=asdict(config), name=config.name, dir=WORKSPACE, id=config.run_id, resume="must") as run:
@@ -230,9 +232,15 @@ def inference(input_str: str, config: ExperimentConfig, checkpoint_name: str | N
 # input_str = "Tom and Lily were playing with their toys in the living room. They liked to build towers and bridges with their blocks and cars."
 # inference(input_str, config, checkpoint_name=None, inference_num=200)
 # %%
+# config_path = CONFIG_DIR / "base_lr_1e-03.toml"
+# run_id = "x46r29n8"
+# config = load_config(config_path)
+# config.run_id = run_id
+# train(config)
+# %%
 if __name__ == "__main__":
   config_path = Path(sys.argv[1])
-  run_id = sys.argv[2] if len(sys.argv) > 2 else None
+  run_id: str | None = sys.argv[2] if len(sys.argv) > 2 else None
   config = load_config(config_path)
   config.run_id = run_id
   train(config)

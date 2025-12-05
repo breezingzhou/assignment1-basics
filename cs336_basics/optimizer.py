@@ -74,6 +74,18 @@ class MyAdamW(Optimizer):
         state["v"] = v
     return loss
 
+  def to(self, device: str):
+    """Move optimizer state to the specified device."""
+    for group in self.param_groups:
+      for p in group["params"]:
+        state = self.state.get(p)
+        if state is not None:
+          for key in state:
+            if isinstance(state[key], Tensor):
+              state[key] = state[key].to(device)
+
+
+    return self
 
 class MyCosineAnnealingLR(LRScheduler):
   def __init__(self, optimizer: Optimizer, warmup_iters: int, cosine_cycle_iters: int, min_lr: float, last_epoch: int = -1, verbose: str = "deprecated",):
