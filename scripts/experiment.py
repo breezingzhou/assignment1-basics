@@ -57,10 +57,10 @@ def train_prepare(config: ExperimentConfig, model: MyTransformerLM, optimizer: M
   if last_checkpoint:
     print(f"Resuming from checkpoint: {last_checkpoint}")
     last_epoch = my_load_checkpoint(last_checkpoint, model, optimizer)
-    config.train_start_epoch = last_epoch
+    config.train_start_epoch = last_epoch + 1
     if sechdule:
       sechdule.last_epoch = last_epoch
-    print(f"Resuming training from epoch {last_epoch}")
+    print(f"Resuming training from epoch {config.train_start_epoch}")
 
 
 def create_from_config(config: ExperimentConfig) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
