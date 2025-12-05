@@ -9,9 +9,10 @@ from tests.test_tokenizer import get_tokenizer_from_vocab_merges_path
 import torch
 import numpy as np
 import wandb
+import sys
 from datetime import datetime
 from pathlib import Path
-from common import OUTPUT_DIR, EXPERIMENT_DIR, CHECKPOINT_FINAL_NAME, ClippingParams, ModelHyperParams, OptimizerHyperParams, SechduleParams, ExperimentConfig, save_config, load_config
+from common import OUTPUT_DIR, WORKSPACE, CHECKPOINT_FINAL_NAME, ClippingParams, ModelHyperParams, OptimizerHyperParams, SechduleParams, ExperimentConfig, save_config, load_config
 # %%
 
 
@@ -76,11 +77,11 @@ def train_model(
   model.to(device)
   model.train()
 
-  with wandb.init(project=config.dataset_name, config=asdict(config), name=config.name) as run:
+  with wandb.init(project=config.dataset_name, config=asdict(config), name=config.name, dir=WORKSPACE) as run:
     for epoch in range(config.train_epochs):
-      print(f"Starting epoch {epoch + 1}/{config.train_epochs}")
+      if epoch % 10 == 0:
+        print(f"Starting epoch {epoch + 1}/{config.train_epochs}")
       optimizer.zero_grad()
-
       x, y = my_get_batch(train_data, config.batch_size,
                           config.module_params.context_length, device)
       logits = model(x)
@@ -195,50 +196,13 @@ def inference(input_str: str, config: ExperimentConfig, checkpoint_name: str | N
 # %%
 
 
-_module_params = ModelHyperParams(
-    vocab_size=10000,
-    context_length=256,
-    d_model=512,
-    d_ff=1344,
-    num_layers=4,
-    num_heads=16,
-    rope_theta=10000.0
-)
-_optimizer_params = OptimizerHyperParams(
-    learning_rate=3e-4,
-    weight_decay=1e-2,
-    betas=(0.9, 0.999),
-    eps=1e-8
-)
-_schedule_params = SechduleParams(
-    min_lr_coeff=0.1,
-    warmup_iters=500,
-    cosine_cycle_iters=40000,
-)
-_clipping_params = ClippingParams(
-    max_l2_norm=1e-2
-)
-_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-config = ExperimentConfig(
-    module_params=_module_params,
-    optimizer_params=_optimizer_params,
-    schedule_params=_schedule_params,
-    clipping_params=_clipping_params,
-    # num_epochs=40000, # 20倍参数量 / content_length / batch_size
-    # num_epochs=66068, # 实际语料tokens数量 / content_length / batch_size
-    train_epochs=40000,
-    batch_size=32,
-    eval_epochs=1000,
-    dataset_name="TinyStoriesV2-GPT4",
-    name=_name,
-    save_every_n_epochs=1000,
-)
-
-# %%
-summary_model(config)
 # %%
 # train(config)
-
 # %%
 # input_str = "Tom and Lily were playing with their toys in the living room. They liked to build towers and bridges with their blocks and cars."
 # inference(input_str, config, checkpoint_name=None, inference_num=200)
+# %%
+if __name__ == "__main__":
+  config_path = Path(sys.argv[1])
+  config = load_config(config_path)
+  train(config)
