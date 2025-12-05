@@ -50,7 +50,7 @@ class ClippingParams:
 
 
 @dataclass
-class TrainConfig:
+class ExperimentConfig:
   module_params: ModelHyperParams
   optimizer_params: OptimizerHyperParams
   schedule_params: SechduleParams | None
@@ -75,7 +75,7 @@ class TrainConfig:
 # %%
 
 
-def load_config(path: Path) -> TrainConfig:
+def load_config(path: Path) -> ExperimentConfig:
   with open(path, 'r') as f:
     config_dict = toml.load(f)
   module_params = ModelHyperParams(**config_dict['module_params'])
@@ -83,7 +83,7 @@ def load_config(path: Path) -> TrainConfig:
   schedule_params = SechduleParams(
       **config_dict['schedule_params']) if 'schedule_params' in config_dict and config_dict['schedule_params'] is not None else None
   clipping_params = ClippingParams(**config_dict['clipping_params'])
-  config = TrainConfig(
+  config = ExperimentConfig(
       module_params=module_params,
       optimizer_params=optimizer_params,
       schedule_params=schedule_params,
@@ -98,7 +98,7 @@ def load_config(path: Path) -> TrainConfig:
   return config
 
 
-def save_config(config: TrainConfig, path: Path):
+def save_config(config: ExperimentConfig, path: Path):
   path.parent.mkdir(parents=True, exist_ok=True)
   with open(path, 'w') as f:
     toml.dump(asdict(config), f)

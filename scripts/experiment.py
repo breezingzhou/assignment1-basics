@@ -11,11 +11,11 @@ import numpy as np
 import wandb
 from datetime import datetime
 from pathlib import Path
-from common import OUTPUT_DIR, EXPERIMENT_DIR, CHECKPOINT_FINAL_NAME, ClippingParams, ModelHyperParams, OptimizerHyperParams, SechduleParams, TrainConfig, save_config, load_config
+from common import OUTPUT_DIR, EXPERIMENT_DIR, CHECKPOINT_FINAL_NAME, ClippingParams, ModelHyperParams, OptimizerHyperParams, SechduleParams, ExperimentConfig, save_config, load_config
 # %%
 
 
-def summary_model(config: TrainConfig):
+def summary_model(config: ExperimentConfig):
   from torchinfo import summary
   model, _, _ = create_from_config(config)
   train_data = load_data(OUTPUT_DIR / f"{config.dataset_name}-train.npy")
@@ -30,13 +30,13 @@ def load_data(data_path: Path) -> np.ndarray:
   return data
 
 
-def train_prepare(config: TrainConfig):
+def train_prepare(config: ExperimentConfig):
   config.experiment_dir.mkdir(parents=True, exist_ok=True)
   config.checkpoint_dir.mkdir(parents=True, exist_ok=True)
   save_config(config, config.experiment_dir / "config.toml")
 
 
-def create_from_config(config: TrainConfig) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
+def create_from_config(config: ExperimentConfig) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
   model = MyTransformerLM(
       vocab_size=config.module_params.vocab_size,
       context_length=config.module_params.context_length,
@@ -70,7 +70,7 @@ def train_model(
     sechdule: MyCosineAnnealingLR | None,
     train_data: np.ndarray,
     val_data: np.ndarray | None,
-    config: TrainConfig,
+    config: ExperimentConfig,
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 ):
   model.to(device)
@@ -114,7 +114,7 @@ def train_model(
 # %%
 
 
-def train(config: TrainConfig):
+def train(config: ExperimentConfig):
   model, optimizer, sechdule = create_from_config(config)
   dataset_name = config.dataset_name
   train_data = load_data(OUTPUT_DIR / f"{dataset_name}-train.npy")
@@ -131,7 +131,7 @@ def train(config: TrainConfig):
 def validate_model(
     checkpoint_path: Path,
     val_data: np.ndarray,
-    config: TrainConfig,
+    config: ExperimentConfig,
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 ):
   model, optimizer, _ = create_from_config(config)
@@ -153,7 +153,7 @@ def validate_model(
 
 
 # %%
-def validate(config: TrainConfig, checkpoint_name: str | None = None):
+def validate(config: ExperimentConfig, checkpoint_name: str | None = None):
   dataset_name = config.dataset_name
   val_data = load_data(data_path=OUTPUT_DIR / f"{dataset_name}-valid.npy")
   checkpoint_name = checkpoint_name or CHECKPOINT_FINAL_NAME
@@ -163,7 +163,7 @@ def validate(config: TrainConfig, checkpoint_name: str | None = None):
 # %%
 
 
-def inference(input_str: str, config: TrainConfig, checkpoint_name: str | None, inference_num: int = 100, device: str = 'cuda' if torch.cuda.is_available() else 'cpu'):
+def inference(input_str: str, config: ExperimentConfig, checkpoint_name: str | None, inference_num: int = 100, device: str = 'cuda' if torch.cuda.is_available() else 'cpu'):
   checkpoint_name = checkpoint_name or CHECKPOINT_FINAL_NAME
   checkpoint_path = config.checkpoint_dir / checkpoint_name
 
@@ -219,7 +219,7 @@ _clipping_params = ClippingParams(
     max_l2_norm=1e-2
 )
 _name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-config = TrainConfig(
+config = ExperimentConfig(
     module_params=_module_params,
     optimizer_params=_optimizer_params,
     schedule_params=_schedule_params,
