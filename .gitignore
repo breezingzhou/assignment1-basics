@@ -165,7 +165,8 @@ cython_debug/
 /data
 .vscode
 output/*.npy
-/experiment
+experiment/*
+!experiment/configs/
 scripts/wandb
 wandb
 *.pickle
