@@ -11,7 +11,8 @@ import numpy as np
 import wandb
 from datetime import datetime
 from pathlib import Path
-from common import OUTPUT_DIR, EXPERIMENT_DIR
+from common import OUTPUT_DIR, EXPERIMENT_DIR, CHECKPOINT_FINAL_NAME
+import toml
 # %%
 
 
@@ -28,17 +29,21 @@ class ModelHyperParams:
 
 @dataclass
 class OptimizerHyperParams:
-  learning_rate: float = 3e-4
-  weight_decay: float = 1e-2
-  betas: tuple[float, float] = (0.9, 0.999)
-  eps: float = 1e-8
+  learning_rate: float
+  weight_decay: float
+  betas: tuple[float, float]
+  eps: float
+
+  def __post_init__(self):
+    if isinstance(self.betas, list):
+      self.betas = (self.betas[0], self.betas[1])
 
 
 @dataclass
 class SechduleParams:
-  min_lr_coeff: float = 0.1
-  warmup_iters: int = 1000
-  cosine_cycle_iters: int = 10000
+  min_lr_coeff: float
+  warmup_iters: int
+  cosine_cycle_iters: int
 
 
 @dataclass
@@ -50,27 +55,64 @@ class ClippingParams:
 class TrainConfig:
   module_params: ModelHyperParams
   optimizer_params: OptimizerHyperParams
-  schedule_params: SechduleParams
+  schedule_params: SechduleParams | None
   clipping_params: ClippingParams
 
   train_epochs: int
   eval_epochs: int
   batch_size: int
 
-  checkpoint_dir: Path
-  experiment_dir: Path
   dataset_name: str
   name: str
+  save_every_n_epochs: int
 
-  def wandb_config(self) -> dict:
-    return asdict(self)
-# %%# %%
+  @property
+  def checkpoint_dir(self) -> Path:
+    return EXPERIMENT_DIR / self.name / "checkpoints"
+
+  @property
+  def experiment_dir(self) -> Path:
+    return EXPERIMENT_DIR / self.name
+
+# %%
 
 
-def sumary_model(config: TrainConfig):
+def load_config(path: Path) -> TrainConfig:
+  with open(path, 'r') as f:
+    config_dict = toml.load(f)
+  module_params = ModelHyperParams(**config_dict['module_params'])
+  optimizer_params = OptimizerHyperParams(**config_dict['optimizer_params'])
+  schedule_params = SechduleParams(
+      **config_dict['schedule_params']) if 'schedule_params' in config_dict and config_dict['schedule_params'] is not None else None
+  clipping_params = ClippingParams(**config_dict['clipping_params'])
+  config = TrainConfig(
+      module_params=module_params,
+      optimizer_params=optimizer_params,
+      schedule_params=schedule_params,
+      clipping_params=clipping_params,
+      train_epochs=config_dict['train_epochs'],
+      eval_epochs=config_dict['eval_epochs'],
+      batch_size=config_dict['batch_size'],
+      dataset_name=config_dict['dataset_name'],
+      name=config_dict['name'],
+      save_every_n_epochs=config_dict['save_every_n_epochs'],
+  )
+  return config
+
+
+def save_config(config: TrainConfig, path: Path):
+  path.parent.mkdir(parents=True, exist_ok=True)
+  with open(path, 'w') as f:
+    toml.dump(asdict(config), f)
+
+
+# %%
+
+
+def summary_model(config: TrainConfig):
   from torchinfo import summary
   model, _, _ = create_from_config(config)
-  train_data = load_data(OUTPUT_DIR / "TinyStoriesV2-GPT4-train.npy")
+  train_data = load_data(OUTPUT_DIR / f"{config.dataset_name}-train.npy")
   x, y = my_get_batch(train_data, config.batch_size,
                       config.module_params.context_length, device='cpu')
   print(summary(model, input_data=x, verbose=0))
@@ -82,11 +124,13 @@ def load_data(data_path: Path) -> np.ndarray:
   return data
 
 
-def prepare(config: TrainConfig):
+def train_prepare(config: TrainConfig):
+  config.experiment_dir.mkdir(parents=True, exist_ok=True)
   config.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+  save_config(config, config.experiment_dir / "config.toml")
 
 
-def create_from_config(config: TrainConfig) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR]:
+def create_from_config(config: TrainConfig) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
   model = MyTransformerLM(
       vocab_size=config.module_params.vocab_size,
       context_length=config.module_params.context_length,
@@ -108,7 +152,7 @@ def create_from_config(config: TrainConfig) -> tuple[MyTransformerLM, MyAdamW, M
       warmup_iters=config.schedule_params.warmup_iters,
       cosine_cycle_iters=config.schedule_params.cosine_cycle_iters,
       min_lr=config.optimizer_params.learning_rate * config.schedule_params.min_lr_coeff
-  )
+  ) if config.schedule_params else None
   return model, optimizer, sechdule
 
 # %%
@@ -130,93 +174,50 @@ def train_model(
     for epoch in range(config.train_epochs):
       print(f"Starting epoch {epoch + 1}/{config.train_epochs}")
       optimizer.zero_grad()
-      # start_time = datetime.now()
 
       x, y = my_get_batch(train_data, config.batch_size,
                           config.module_params.context_length, device)
-      # print(f"[{datetime.now() - start_time}] Data loaded ")
       logits = model(x)
-      # print(f"[{datetime.now() - start_time}] Forward pass completed ")
       loss = my_cross_entropy(logits, y)
-      # print(f"[{datetime.now() - start_time}] Loss computed ")
       # print(f"memory_allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
       # print(f"memory_reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
       loss.backward()
-      # print(f"[{datetime.now() - start_time}] Backward pass completed ")
       my_gradient_clipping(model.parameters(), config.clipping_params.max_l2_norm)
 
       optimizer.step()
-      # print(f"[{datetime.now() - start_time}] Optimizer step completed ")
       if sechdule:
         sechdule.step()
 
-      run.log({"train_loss": loss.item()}, step=epoch)
+      run.log({
+          "train_loss": loss.item(),
+          "lr": sechdule.get_last_lr()[0] if sechdule else config.optimizer_params.learning_rate
+      }, step=epoch)
 
       # Save checkpoint periodically
-      if epoch % 1000 == 0:
+      if epoch % config.save_every_n_epochs == 0 and epoch != 0:
         checkpoint_path = config.checkpoint_dir / f"checkpoint_iter_{epoch}.pth"
         my_save_checkpoint(model, optimizer, epoch, checkpoint_path)
         print(f"Checkpoint saved at iteration {epoch}")
 
   # Final checkpoint
   my_save_checkpoint(model, optimizer, config.train_epochs,
-                     config.checkpoint_dir / "checkpoint_final.pth")
+                     config.checkpoint_dir / CHECKPOINT_FINAL_NAME)
   print("Training completed")
 
 
 # %%
 
-_module_params = ModelHyperParams(
-    vocab_size=10000,
-    context_length=256,
-    d_model=512,
-    d_ff=1344,
-    num_layers=4,
-    num_heads=16,
-    rope_theta=10000.0
-)
-_optimizer_params = OptimizerHyperParams(
-    learning_rate=3e-4,
-    weight_decay=1e-2,
-    betas=(0.9, 0.999),
-    eps=1e-8
-)
-_schedule_params = SechduleParams(
-    warmup_iters=1000,
-    cosine_cycle_iters=10000,
-)
-_clipping_params = ClippingParams(
-    max_l2_norm=1e-2
-)
-_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-config = TrainConfig(
-    module_params=_module_params,
-    optimizer_params=_optimizer_params,
-    schedule_params=_schedule_params,
-    clipping_params=_clipping_params,
-    # num_epochs=40000, # 20倍参数量 / content_length / batch_size
-    # num_epochs=66068, # 实际语料tokens数量 / content_length / batch_size
-    train_epochs=40000,
-    batch_size=32,
-    eval_epochs=1000,
-    checkpoint_dir=EXPERIMENT_DIR / _name,
-    experiment_dir=EXPERIMENT_DIR / _name,
-    dataset_name="TinyStoriesV2-GPT4",
-    name=_name,
-)
 
-# %%
-
-
-def train():
+def train(config: TrainConfig):
   model, optimizer, sechdule = create_from_config(config)
-
-  train_data = load_data(OUTPUT_DIR / "TinyStoriesV2-GPT4-train.npy")
-  # val_data = load_data(data_path=OUTPUT_DIR / "TinyStoriesV2-GPT4-valid.npy")
-  prepare(config)
+  dataset_name = config.dataset_name
+  train_data = load_data(OUTPUT_DIR / f"{dataset_name}-train.npy")
+  # val_data = load_data(data_path=OUTPUT_DIR / f"{dataset_name}-valid.npy")
+  train_prepare(config)
   # torch.cuda.memory._record_memory_history()
-  train_model(model, optimizer, None, train_data, None, config)
+  train_model(model, optimizer, sechdule, train_data, None, config)
   # torch.cuda.memory._dump_snapshot("my_snapshot.pickle")
+
 
 # %%
 
@@ -246,21 +247,27 @@ def validate_model(
 
 
 # %%
-val_data = load_data(data_path=OUTPUT_DIR / "TinyStoriesV2-GPT4-valid.npy")
-checkpoint_path = EXPERIMENT_DIR / "20251204_183731" / "checkpoint_final.pth"
-validate_model(checkpoint_path, val_data, config)
+def validate(config: TrainConfig, checkpoint_name: str | None = None):
+  dataset_name = config.dataset_name
+  val_data = load_data(data_path=OUTPUT_DIR / f"{dataset_name}-valid.npy")
+  checkpoint_name = checkpoint_name or CHECKPOINT_FINAL_NAME
+  checkpoint_path = config.checkpoint_dir / checkpoint_name
+  validate_model(checkpoint_path, val_data, config)
 
 # %%
 
 
-def inference(config: TrainConfig, checkpoint_path: Path, input_str: str, inference_num: int = 100, device: str = 'cuda' if torch.cuda.is_available() else 'cpu'):
-  dataset_name = config.dataset_name
+def inference(input_str: str, config: TrainConfig, checkpoint_name: str | None, inference_num: int = 100, device: str = 'cuda' if torch.cuda.is_available() else 'cpu'):
+  checkpoint_name = checkpoint_name or CHECKPOINT_FINAL_NAME
+  checkpoint_path = config.checkpoint_dir / checkpoint_name
 
+  dataset_name = config.dataset_name
   tokenizer: BpeTokenizer = get_tokenizer_from_vocab_merges_path(
       OUTPUT_DIR / f"{dataset_name}_vocab.json",
       OUTPUT_DIR / f"{dataset_name}_merges.txt",
       special_tokens=["<|endoftext|>"]
   )
+
   model, optimizer, _ = create_from_config(config)
   iteration = my_load_checkpoint(checkpoint_path, model, optimizer)
   model.to(device)
@@ -279,8 +286,53 @@ def inference(config: TrainConfig, checkpoint_path: Path, input_str: str, infere
   print(f"Predicted token IDs: {predicted_ids}")
   print(f"Predicted text: {predicted_text}")
 
+# %%
+
+
+_module_params = ModelHyperParams(
+    vocab_size=10000,
+    context_length=256,
+    d_model=512,
+    d_ff=1344,
+    num_layers=4,
+    num_heads=16,
+    rope_theta=10000.0
+)
+_optimizer_params = OptimizerHyperParams(
+    learning_rate=3e-4,
+    weight_decay=1e-2,
+    betas=(0.9, 0.999),
+    eps=1e-8
+)
+_schedule_params = SechduleParams(
+    min_lr_coeff=0.1,
+    warmup_iters=500,
+    cosine_cycle_iters=40000,
+)
+_clipping_params = ClippingParams(
+    max_l2_norm=1e-2
+)
+_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+config = TrainConfig(
+    module_params=_module_params,
+    optimizer_params=_optimizer_params,
+    schedule_params=_schedule_params,
+    clipping_params=_clipping_params,
+    # num_epochs=40000, # 20倍参数量 / content_length / batch_size
+    # num_epochs=66068, # 实际语料tokens数量 / content_length / batch_size
+    train_epochs=40000,
+    batch_size=32,
+    eval_epochs=1000,
+    dataset_name="TinyStoriesV2-GPT4",
+    name=_name,
+    save_every_n_epochs=1000,
+)
 
 # %%
-# checkpoint_path = CHECKPOINTS_DIR / "20251204_183731" / "checkpoint_final.pth"
+summary_model(config)
+# %%
+# train(config)
+
+# %%
 # input_str = "Tom and Lily were playing with their toys in the living room. They liked to build towers and bridges with their blocks and cars."
-# inference(config, checkpoint_path, input_str, inference_num=200)
+# inference(input_str, config, checkpoint_name=None, inference_num=200)
