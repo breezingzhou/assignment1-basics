@@ -26,7 +26,10 @@ class MyLinear(Module):
     self.reset_parameters()
 
   def reset_parameters(self) -> None:
-    init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+    # init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+    var = 2.0 / (self.in_features + self.out_features)
+    std = math.sqrt(var)
+    init.trunc_normal_(self.weight, mean=0.0, std=std, a=-3.0 * std, b=3.0 * std)
 
   def forward(self, input: Float[Tensor, "... d_in"]) -> Float[Tensor, "... d_out"]:
     return einsum(self.weight, input, "d_out d_in, ... d_in -> ... d_out")
@@ -47,7 +50,7 @@ class MyEmbedding(Module):
     self.reset_parameters()
 
   def reset_parameters(self) -> None:
-    init.normal_(self.weight, mean=0.0, std=1.0)
+    init.trunc_normal_(self.weight, mean=0.0, std=1.0, a=-3.0, b=3.0)
 
   def forward(self, token_ids: Int[Tensor, "..."]) -> Float[Tensor, "... d_model"]:
     return self.weight[token_ids]
