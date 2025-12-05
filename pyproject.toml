@@ -21,6 +21,7 @@ dependencies = [
     "ty>=0.0.1a16",
     "ipykernel<7.0.0",
     "humanize>=4.14.0",
+    "toml>=0.10.2",
 ]
 
 [build-system]
