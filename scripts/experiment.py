@@ -3,7 +3,7 @@
 from dataclasses import asdict
 from cs336_basics.model import MyTransformerLM
 from cs336_basics.optimizer import MyAdamW, MyCosineAnnealingLR
-from cs336_basics.nn_utils import my_cross_entropy, my_get_batch, my_save_checkpoint, my_load_checkpoint, my_gradient_clipping
+from cs336_basics.nn_utils import my_cross_entropy, my_get_batch, my_save_checkpoint, my_load_checkpoint, my_gradient_clipping, my_save_xy_snapshot
 from cs336_basics.tokenizer import BpeTokenizer
 from tests.test_tokenizer import get_tokenizer_from_vocab_merges_path
 import torch
@@ -34,6 +34,7 @@ def load_data(data_path: Path) -> np.ndarray:
 def train_prepare(config: ExperimentConfig):
   config.experiment_dir.mkdir(parents=True, exist_ok=True)
   config.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+  config.snapshot_dir.mkdir(parents=True, exist_ok=True)
   save_config(config, config.experiment_dir / "config.toml")
 
 
@@ -80,7 +81,7 @@ def train_model(
   with wandb.init(project=config.dataset_name, config=asdict(config), name=config.name, dir=WORKSPACE) as run:
     for epoch in range(config.train_epochs):
       if epoch % 10 == 0:
-        print(f"Starting epoch {epoch + 1}/{config.train_epochs}")
+        print(f"Starting epoch {epoch}/{config.train_epochs}")
       optimizer.zero_grad()
       x, y = my_get_batch(train_data, config.batch_size,
                           config.module_params.context_length, device)
@@ -102,8 +103,10 @@ def train_model(
 
       # Save checkpoint periodically
       if epoch % config.save_every_n_epochs == 0 and epoch != 0:
-        checkpoint_path = config.checkpoint_dir / f"checkpoint_iter_{epoch}.pth"
+        checkpoint_path = config.checkpoint_dir / f"checkpoint_iter_{epoch}.pt"
+        snapshot_path = config.snapshot_dir / f"snapshot_iter_{epoch}.pt"
         my_save_checkpoint(model, optimizer, epoch, checkpoint_path)
+        my_save_xy_snapshot(x, y, logits, snapshot_path)
         print(f"Checkpoint saved at iteration {epoch}")
 
   # Final checkpoint

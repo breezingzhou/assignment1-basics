@@ -151,3 +151,22 @@ def my_load_checkpoint(src: str | os.PathLike | BinaryIO | IO[bytes], model: tor
   model.load_state_dict(checkpoint["model_state"])
   optimizer.load_state_dict(checkpoint["optimizer_state"])
   return checkpoint["iteration"]
+
+
+# %%
+def my_save_xy_snapshot(x: Tensor, y: Tensor, logits: Tensor, out: str | os.PathLike | BinaryIO | IO[bytes]) -> None:
+  pair = torch.hstack([x, y[:, -1:]])
+  save_dict = {
+      "xy_pair": pair,
+      "logits": logits
+  }
+  torch.save(save_dict, out)
+
+
+def my_load_xy_snapshot(src: str | os.PathLike | BinaryIO | IO[bytes]) -> tuple[Tensor, Tensor, Tensor]:
+  snapshot = torch.load(src)
+  pair = snapshot["xy_pair"]
+  logits = snapshot["logits"]
+  x = pair[:, :-1]
+  y = pair[:, 1:]
+  return x, y, logits

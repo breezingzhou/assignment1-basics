@@ -71,6 +71,10 @@ class ExperimentConfig:
     return EXPERIMENT_DIR / self.name / "checkpoints"
 
   @property
+  def snapshot_dir(self) -> Path:
+    return EXPERIMENT_DIR / self.name / "snapshots"
+
+  @property
   def experiment_dir(self) -> Path:
     return EXPERIMENT_DIR / self.name
 
