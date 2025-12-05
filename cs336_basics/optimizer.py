@@ -76,13 +76,13 @@ class MyAdamW(Optimizer):
 
 
 class MyCosineAnnealingLR(LRScheduler):
-  def __init__(self, optimizer: Optimizer, warmup_iters: int, cosine_cycle_iters: int, min_lr: float, last_epoch: int = -1):
-    self.optimizer = optimizer
+  def __init__(self, optimizer: Optimizer, warmup_iters: int, cosine_cycle_iters: int, min_lr: float, last_epoch: int = -1, verbose: str = "deprecated",):
 
     self.min_lr = min_lr
     self.warmup_iters = warmup_iters
     self.cosine_cycle_iters = cosine_cycle_iters
     self.last_epoch = last_epoch
+    super().__init__(optimizer, last_epoch, verbose)
 
   def get_lr(self) -> list[float]:
     current_step = self.last_epoch + 1
