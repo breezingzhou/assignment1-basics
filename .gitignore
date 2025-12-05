@@ -168,3 +168,4 @@ output/*.npy
 /experiment
 scripts/wandb
 wandb
+*.pickle
