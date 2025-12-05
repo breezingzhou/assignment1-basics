@@ -50,7 +50,7 @@ class SechduleParams:
 class ClippingParams:
   max_l2_norm: float = 1e-2
 
-
+#TODO use pydantic
 @dataclass
 class ExperimentConfig:
   module_params: ModelHyperParams
@@ -65,6 +65,8 @@ class ExperimentConfig:
   dataset_name: str
   name: str
   save_every_n_epochs: int
+  run_id: str | None = None
+  train_start_epoch: int = 0
 
   @property
   def checkpoint_dir(self) -> Path:

@@ -31,11 +31,35 @@ def load_data(data_path: Path) -> np.ndarray:
   return data
 
 
-def train_prepare(config: ExperimentConfig):
+def get_last_checkpoint(checkpoint_dir: Path) -> Path | None:
+  if not checkpoint_dir.exists():
+    return None
+  checkpoints = list(checkpoint_dir.glob("checkpoint_iter_*.pt"))
+  if not checkpoints:
+    return None
+  last_checkpoint = max(checkpoints, key=lambda x: int(x.stem.split("_")[-1]))
+  return last_checkpoint
+
+
+def train_prepare(config: ExperimentConfig, model: MyTransformerLM, optimizer: MyAdamW, sechdule: MyCosineAnnealingLR | None):
+  # 创建相应文件夹
   config.experiment_dir.mkdir(parents=True, exist_ok=True)
   config.checkpoint_dir.mkdir(parents=True, exist_ok=True)
   config.snapshot_dir.mkdir(parents=True, exist_ok=True)
   save_config(config, config.experiment_dir / "config.toml")
+
+  # 如果文件夹中有上次的检查点，则加载模型和优化器状态，更新sechdule
+  # resume 必须与run_id 配合
+  last_checkpoint = get_last_checkpoint(config.checkpoint_dir)
+  assert (last_checkpoint is not None) == (
+      config.run_id is not None), "run_id should be set only if training is resumed"
+
+  if last_checkpoint:
+    last_epoch = my_load_checkpoint(last_checkpoint, model, optimizer)
+    config.train_start_epoch = last_epoch
+    if sechdule:
+      sechdule.last_epoch = last_epoch
+    print(f"Resuming training from epoch {last_epoch}")
 
 
 def create_from_config(config: ExperimentConfig) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
@@ -78,8 +102,8 @@ def train_model(
   model.to(device)
   model.train()
 
-  with wandb.init(project=config.dataset_name, config=asdict(config), name=config.name, dir=WORKSPACE) as run:
-    for epoch in range(config.train_epochs):
+  with wandb.init(project=config.dataset_name, config=asdict(config), name=config.name, dir=WORKSPACE, id=config.run_id, resume="must") as run:
+    for epoch in range(config.train_start_epoch, config.train_epochs):
       if epoch % 10 == 0:
         print(f"Starting epoch {epoch}/{config.train_epochs}")
       optimizer.zero_grad()
@@ -123,7 +147,8 @@ def train(config: ExperimentConfig):
   dataset_name = config.dataset_name
   train_data = load_data(OUTPUT_DIR / f"{dataset_name}-train.npy")
   # val_data = load_data(data_path=OUTPUT_DIR / f"{dataset_name}-valid.npy")
-  train_prepare(config)
+  train_prepare(config, model, optimizer, sechdule)
+
   # torch.cuda.memory._record_memory_history()
   train_model(model, optimizer, sechdule, train_data, None, config)
   # torch.cuda.memory._dump_snapshot("my_snapshot.pickle")
@@ -207,5 +232,7 @@ def inference(input_str: str, config: ExperimentConfig, checkpoint_name: str | N
 # %%
 if __name__ == "__main__":
   config_path = Path(sys.argv[1])
+  run_id = sys.argv[2] if len(sys.argv) > 2 else None
   config = load_config(config_path)
+  config.run_id = run_id
   train(config)
