@@ -19,7 +19,7 @@ from common import CONFIG_DIR, OUTPUT_DIR, WORKSPACE, CHECKPOINT_FINAL_NAME, Cli
 def summary_model(config: ExperimentConfig):
   from torchinfo import summary
   model, _, _ = create_from_config(config)
-  train_data = load_data(OUTPUT_DIR / f"{config.dataset_name}-train.npy")
+  train_data = load_data(OUTPUT_DIR / f"{config.dataset_name}_train.npy")
   x, y = my_get_batch(train_data, config.batch_size,
                       config.module_params.context_length, device='cpu')
   print(summary(model, input_data=x, verbose=0))
@@ -103,8 +103,9 @@ def train_model(
   model.to(device)
   optimizer.to(device)
   model.train()
+  resume = "must" if config.run_id else "allow"
 
-  with wandb.init(project=config.dataset_name, config=asdict(config), name=config.name, dir=WORKSPACE, id=config.run_id, resume="must") as run:
+  with wandb.init(project=config.dataset_name, config=asdict(config), name=config.name, dir=WORKSPACE, id=config.run_id, resume=resume) as run:
     for epoch in range(config.train_start_epoch, config.train_epochs):
       if epoch % 10 == 0:
         print(f"Starting epoch {epoch}/{config.train_epochs}")
@@ -147,8 +148,8 @@ def train_model(
 def train(config: ExperimentConfig):
   model, optimizer, sechdule = create_from_config(config)
   dataset_name = config.dataset_name
-  train_data = load_data(OUTPUT_DIR / f"{dataset_name}-train.npy")
-  # val_data = load_data(data_path=OUTPUT_DIR / f"{dataset_name}-valid.npy")
+  train_data = load_data(OUTPUT_DIR / f"{dataset_name}_train.npy")
+  # val_data = load_data(data_path=OUTPUT_DIR / f"{dataset_name}_valid.npy")
   train_prepare(config, model, optimizer, sechdule)
 
   # torch.cuda.memory._record_memory_history()

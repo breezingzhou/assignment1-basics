@@ -33,7 +33,7 @@ class BpeTokenizer:
     token_ids = [self.vocab_rev.get(byte_token, 0) for byte_token in byte_tokens]
     return token_ids
 
-  def encode(self, text: str) -> list[int]:
+  def encode(self, text: str, debug: bool = False) -> list[int]:
     res = []
 
     if self.special_tokens:
@@ -41,7 +41,9 @@ class BpeTokenizer:
     else:
       contents = [Content.normal(text)]
 
-    for content in contents:
+    for index, content in enumerate(contents):
+      if debug:
+        print(f"Processing content {index}/{len(contents)}")
       if content.type == ContentType.SPECIAL:
         res.append(self.vocab_rev.get(content.content.encode(), 0))
       else:

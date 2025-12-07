@@ -42,22 +42,22 @@ def bpe_encode(dataset_name: str, groups=["valid", "train",]):
 
   for group in groups:
     print(f"Processing group: {group}")
-    input_file = DATA_DIR / f"{dataset_name}-{group}.txt"
-    output_file = OUTPUT_DIR / f"{dataset_name}-{group}.npy"
+    input_file = DATA_DIR / f"{dataset_name}_{group}.txt"
+    output_file = OUTPUT_DIR / f"{dataset_name}_{group}.npy"
     size_bytes = input_file.stat().st_size
     chunk_size = int(0.5 * 1024 * 1024 * 1024)  # 0.5 GB
 
     start_time = time.time()
     if size_bytes <= chunk_size:  # less than 0.5 GB
       text = get_contents(input_file)
-      all_tokens = tokenizer.encode(text)
+      all_tokens = tokenizer.encode(text, debug=True)
     else:
       split_special_token = b"<|endoftext|>"
       num_chunks = math.ceil(size_bytes / chunk_size)
       all_tokens = []
       for index, content in enumerate(get_contents_v2(input_file, num_chunks, split_special_token)):
         print(f"[{(time.time() - start_time):.2f}] Processing chunk {index + 1}/{num_chunks} for group {group}")
-        tokens = tokenizer.encode(content)
+        tokens = tokenizer.encode(content, debug=True)
         all_tokens.extend(tokens)
 
     tokens_array = np.array(all_tokens, dtype=np.int32)
@@ -66,5 +66,6 @@ def bpe_encode(dataset_name: str, groups=["valid", "train",]):
 
 
 # %%
-dataset_name = "TinyStoriesV2-GPT4"
+# dataset_name = "TinyStoriesV2-GPT4"
+dataset_name = "owt"
 bpe_encode(dataset_name)
