@@ -4,9 +4,12 @@
 # 存储成bin文件 提供给dataloader使用  np.memmap
 
 from collections.abc import Generator
+import json
 import time
 from cs336_basics.pretokenization_example import find_chunk_boundaries
 from cs336_basics.tokenizer import BpeTokenizer
+from cs336_basics.train_bpe import get_tokens, get_tokens_v2
+from tests.common import gpt2_bytes_to_unicode
 from tests.test_tokenizer import get_tokenizer_from_vocab_merges_path
 from common import OUTPUT_DIR, DATA_DIR
 from pathlib import Path
@@ -32,7 +35,7 @@ def get_contents_v2(input_file: Path, num_chunks: int, split_special_token: byte
     yield data
 
 
-def bpe_encode(dataset_name: str, groups=["valid", "train",]):
+def bpe_encode(dataset_name: str, groups: list[str] = ["valid", "train",]):
   print(f"Encoding dataset: {dataset_name} with groups: {groups}")
   tokenizer: BpeTokenizer = get_tokenizer_from_vocab_merges_path(
       OUTPUT_DIR / f"{dataset_name}_vocab.json",
@@ -66,6 +69,35 @@ def bpe_encode(dataset_name: str, groups=["valid", "train",]):
 
 
 # %%
+def count_tokens(dataset_name: str, groups: list[str] = ["valid", "train"]):
+  gpt2_byte_encoder = gpt2_bytes_to_unicode()
+  for group in groups:
+    input_file = DATA_DIR / f"{dataset_name}_{group}.txt"
+    output_file = OUTPUT_DIR / f"{dataset_name}_{group}_tokens.json"
+    size_bytes = input_file.stat().st_size
+    chunk_size = int(0.5 * 1024 * 1024 * 1024)  # 0.5 GB
+
+    start_time = time.time()
+    if size_bytes <= chunk_size:  # less than 0.5 GB
+      tokens = get_tokens(input_file, special_tokens=["<|endoftext|>"])
+    else:
+      num_chunks = math.ceil(size_bytes / chunk_size)
+      tokens = get_tokens_v2(input_file, special_tokens=["<|endoftext|>"],
+                             num_chunks=num_chunks, num_processes=8)
+    print(f"[{(time.time() - start_time):.2f}] Token counts for {dataset_name} {group}: {len(tokens)}")
+
+    to_dump: dict[str, int] = {}
+    for token, count in tokens.items():
+      byte_token = token.encode("utf-8")
+      encoded_chars = ''.join(gpt2_byte_encoder[b] for b in byte_token)
+      to_dump[encoded_chars] = count
+
+    with open(output_file, "w", encoding="utf-8") as f:
+      json.dump(to_dump, f, indent=2, ensure_ascii=False)
+
+
+# %%
 # dataset_name = "TinyStoriesV2-GPT4"
 dataset_name = "owt"
-bpe_encode(dataset_name)
+# bpe_encode(dataset_name)
+count_tokens(dataset_name)
