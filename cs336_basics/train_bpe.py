@@ -14,9 +14,7 @@ from cs336_basics.bpe_types import BpeToken, BpePair, SimplePair
 def init_bpe_tokens(tokens: Counter[str]) -> list[BpeToken]:
   bpe_tokens = []
   for token, count in tokens.items():
-    origin = token.encode("utf-8")
-    byte_tokens = [origin[i:i + 1] for i in range(len(origin))]
-    bpe_token = BpeToken(origin=origin, count=count, tokens=byte_tokens)
+    bpe_token = BpeToken(origin_str=token, count=count)
     bpe_tokens.append(bpe_token)
   return bpe_tokens
 
@@ -48,7 +46,7 @@ def init_bpe_pairs(bpe_tokens: list[BpeToken]) -> list[BpePair]:
 # %%
 
 
-def update_bpe_pairs_dict(bpe_pairs_dict: dict[SimplePair, BpePair], target_bpe_pair: BpePair, vocab_no: int):
+def update_bpe_pairs_dict(bpe_pairs_dict: dict[SimplePair, BpePair], target_bpe_pair: BpePair):
   target_pair = SimplePair(target_bpe_pair.first, target_bpe_pair.second)
   bpe_pairs_dict.pop(target_pair)
 
@@ -154,7 +152,7 @@ def train_bpe(
     bpe_pair = max(bpe_pairs_dict.values())
     vocab[vocab_no] = bpe_pair.first + bpe_pair.second
     merges.append(bpe_pair.to_pair())
-    update_bpe_pairs_dict(bpe_pairs_dict, bpe_pair, vocab_no)
+    update_bpe_pairs_dict(bpe_pairs_dict, bpe_pair)
   return vocab, merges
 
 

@@ -4,6 +4,8 @@ from pathlib import Path
 
 import toml
 
+from tests.common import gpt2_bytes_to_unicode
+
 
 # %%
 
@@ -14,6 +16,7 @@ EXPERIMENT_DIR = WORKSPACE / "experiment"
 CHECKPOINT_FINAL_NAME = "checkpoint_final.pth"
 CONFIG_DIR = EXPERIMENT_DIR / "configs"
 BASE_CONFIG_PATH = CONFIG_DIR / "base.toml"
+TMP_DIR = WORKSPACE / "tmp"
 
 
 @dataclass
@@ -50,7 +53,9 @@ class SechduleParams:
 class ClippingParams:
   max_l2_norm: float = 1e-2
 
-#TODO use pydantic
+# TODO use pydantic
+
+
 @dataclass
 class ExperimentConfig:
   module_params: ModelHyperParams
@@ -110,6 +115,28 @@ def save_config(config: ExperimentConfig, path: Path):
   path.parent.mkdir(parents=True, exist_ok=True)
   with open(path, 'w') as f:
     toml.dump(asdict(config), f)
+
+
+gpt2_byte_encoder = gpt2_bytes_to_unicode()
+gpt2_byte_decoder = {v: k for k, v in gpt2_byte_encoder.items()}
+
+
+def gpt2_encode(token: str) -> str:
+  """
+  将特殊符号编码成可展示的符号
+  """
+  byte_token = token.encode("utf-8")
+  encoded_token = ''.join(gpt2_byte_encoder[b] for b in byte_token)
+  return encoded_token
+
+
+def gpt2_decode(encoded_token: str) -> str:
+  """
+  将可展示的符号解码成原始符号
+  """
+  byte_token = bytes(gpt2_byte_decoder[c] for c in encoded_token)
+  decoded_token = byte_token.decode("utf-8", errors="replace")
+  return decoded_token
 
 
 __all__ = ["WORKSPACE", "OUTPUT_DIR", "DATA_DIR", "EXPERIMENT_DIR", "CHECKPOINT_FINAL_NAME",]

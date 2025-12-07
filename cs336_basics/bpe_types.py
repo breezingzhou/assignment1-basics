@@ -22,9 +22,18 @@ class SimplePair:
 
 @dataclass
 class BpeToken:
+  origin_str: str
   origin: bytes
   count: int
   tokens: list[bytes]
+
+  def __init__(self, origin_str: str, count: int):
+    origin = origin_str.encode("utf-8")
+    byte_tokens = [origin[i:i + 1] for i in range(len(origin))]
+    self.origin_str = origin_str
+    self.origin = origin
+    self.count = count
+    self.tokens = byte_tokens
 
   def __repr__(self) -> str:
     return f"BpeToken({self.origin!r}, count={self.count}, tokens={self.tokens})"

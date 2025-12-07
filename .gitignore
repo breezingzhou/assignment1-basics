@@ -170,3 +170,4 @@ experiment/*
 scripts/wandb
 wandb
 *.pickle
+/tmp
