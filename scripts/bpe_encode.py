@@ -7,6 +7,7 @@ from collections import Counter
 from collections.abc import Generator
 import json
 import time
+from cs336_basics.bpe_utils import split_special_tokens_tokenizer
 from cs336_basics.pretokenization_example import find_chunk_boundaries
 from cs336_basics.tokenizer import BpeTokenizer
 from cs336_basics.train_bpe import get_tokens, get_tokens_v2
@@ -125,8 +126,40 @@ def count_tokens(dataset_name: str, groups: list[str] = ["valid", "train"]):
 
 # %%
 # dataset_name = "TinyStoriesV2-GPT4"
-dataset_name = "owt"
+# dataset_name = "owt"
 # count_tokens(dataset_name)
-bpe_encode(dataset_name, groups=["train"], create_cache=True)
+# bpe_encode(dataset_name, groups=["train"], create_cache=True)
 
 # %%
+import polars as pl
+import time
+from common import WORKSPACE
+def compare_with_expected():
+  parquet_file = OUTPUT_DIR / "idxs.tinystories_sample_5M.parquet"
+  df = pl.read_parquet(parquet_file)
+  expected = df['idx'].to_list()
+  print(f"Length of expected idxs: {len(expected)}")
+
+
+  start_time = time.time()
+  # input_path = DATA_DIR / "TinyStoriesV2-GPT4_train.txt"
+  input_file = WORKSPACE / "tests/fixtures/tinystories_sample_5M.txt"
+  dataset_name = "tinystories_sample_5M"
+  special_tokens = ["<|endoftext|>"]
+
+  tokens = get_tokens_v2(input_file, special_tokens,
+                            num_chunks=16, num_processes=16)
+  print(f"Time taken: {(time.time() - start_time):.2f} seconds")
+
+  tokenizer: BpeTokenizer = get_tokenizer_from_vocab_merges_path(
+      OUTPUT_DIR / f"{dataset_name}_vocab.json",
+      OUTPUT_DIR / f"{dataset_name}_merges.txt",
+      special_tokens=["<|endoftext|>"]
+  )
+  tokenizer.create_cache(tokens)
+
+  text = get_contents(input_file)
+
+  idxs = tokenizer.encode(text)
+  print(f"Length of encoded idxs: {len(idxs)}")
+  print("expected == idxs:", expected == idxs)
