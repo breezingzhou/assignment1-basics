@@ -165,6 +165,7 @@ cython_debug/
 /data
 .vscode
 output/*.npy
+output/*_tokens.json
 experiment/*
 !experiment/configs/
 scripts/wandb
