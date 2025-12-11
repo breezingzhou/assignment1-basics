@@ -4,6 +4,7 @@ import json
 
 from cs336_basics.train_bpe import train_bpe
 from _common import OUTPUT_DIR, DATA_DIR
+from scripts.common import WORKSPACE
 from tests.common import gpt2_bytes_to_unicode
 # %%
 
@@ -75,6 +76,16 @@ def owt():
   # get_longest_token(vocab_path)
 
 
+def tinystories_sample_5M():
+  input_file = WORKSPACE / "tests/fixtures/tinystories_sample_5M.txt"
+  vocab_size = 2000
+  special_tokens = ["<|endoftext|>"]
+
+  vocab_path = OUTPUT_DIR / "tinystories_sample_5M_vocab.json"
+  merges_path = OUTPUT_DIR / "tinystories_sample_5M_merges.txt"
+  vocab, merges = train_bpe(input_file, vocab_size, special_tokens)
+  save_result(vocab, merges, vocab_path, merges_path)
 # %%
 # TinyStoriesV2()
 # owt()
+tinystories_sample_5M()
