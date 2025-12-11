@@ -33,6 +33,12 @@ uft-8编码是变长编码，可变长度1-4字节，有可能多个字节才对
 ### Give a two byte sequence that does not decode to any Unicode character(s).
 b'\xb0\x80' utf-8编码长度为2时 首字节范围为(0xC0–0xDF) 次字节范围为(0x80–0xBF)
 
+## Problem(train_bpe):BPE Tokenizer Training
+Note:
+* python 遍历list的时候不要去修改list
+* 先实现个简单的 profile后再针对性优化
+* json中 int作为key的时候 会保存为string
+
 ## Problem(train_bpe_tinystories):BPE Training on TinyStories
 ### Train a byte-level BPE tokenizer on the TinyStories dataset,using a maximum vocabulary size of 10,000. Make sure to add the TinyStories `<|endoftext|>` special token to thevocabulary. Serialize the resulting vocabulary and merges to disk for further inspection. How many hours and memory did training take? What is the longest token in the vocabulary? Does it make sense?<br>
 <b>Resource requirements</b>: ≤ 30minutes (noGPUs) , ≤ 30GB RAM<br>
@@ -56,12 +62,39 @@ BPE Training最耗时的部分是 选择出现频率最高的pair  (max函数)
 
 ### Compare and contrast the tokenizer that you get training on TinyStories versus OpenWebText.
 
+## Problem(tokenizer): Implementing the tokenizer
+Note:
+* cache很有效
+* 按照训练的方式过一遍merge（不需要max） 可以高效创建cache
 
 
-## Problem(tokenizer_experiments):Experimentswithtokenizers
+## Problem(tokenizer_experiments):Experiments with tokenizers
 
+## Problem(linear): Implementing the linear module
 
-## Problem(transformer_accounting):TransformerLMresourceaccounting
+## Problem(embedding): Implement the embedding module
+
+## Problem (rmsnorm): Root Mean Square Layer Normalization
+
+## Problem(positionwise_feedforward): Implement the position-wisefeed-forward network
+
+## Problem(rope): Implement RoPE
+
+## Problem(softmax): Implement softmax
+Note:
+* 减去max 使的exp计算结果不会过大
+
+## Problem (scaled_dot_product_attention): Implement scaled dot-product attention
+
+## Problem (multihead_self_attention): Implement causal multi-head self-attention
+
+## Problem (transformer_block): Implement the Transformer block
+Note:
+* Tensor.view() 核心依赖张量的内存连续性
+
+## Problem(transformer_lm): Implementing the Transformer LM
+
+## Problem(transformer_accounting):Transformer LM resource accounting
 ### Consider GPT-2 XL,which has the following configuration. Suppose we constructed our model using this configuration. How many trainable parameters would our model have? Assuming each parameter is represented using single-precision floating point, how much memory is required to just load this model?
 
   * vocab_size : 50,257
@@ -179,6 +212,18 @@ Context Length Model:
 | 2.9524576663970947 | 2.830752258827424e-22  | 5.523777196235162e+16  |
 | 2.5719187259674072 | 3.145280252525542e-23  | 1.7737461767014973e+18 |
 
+## Problem (cross_entropy): Implement Cross entropy
+Note:
+* logsumexp 数学的应用！！
+
+## Problem (learning_rate_tuning): Tuning the learning rate
+
+## Problem (adamw): Implement AdamW
+Note:
+* 从checkpoint加载adamw的参数时候 需要注意参数所在的位置（cpu or cuda）
+* 不同的参数group 可以有不同的learning rate
+
+
 ## Problem (adamwAccounting): Resource accounting for training with AdamW
 ### How much peak memory does running AdamW require? Decompose your answer based on the memory usage of the parameters, activations, gradients, and optimizer state. Express your answer in terms of the batch_size and the model hyperparameters (vocab_size, context_length, num_layers, d_model, num_heads). Assume d_ff = 4×d_model. For simplicity, when calculating memory usage of activations, consider only the following components:
 - Transformer block
@@ -228,3 +273,17 @@ batch_size = 3
 每一步中 前向传播 4.3 quadrillion FLOP；反向传播 8.6 quadrillion；优化计算 29.8 billion
 
 总共需要约6114.6天
+
+## Problem (learning_rate_schedule): Implement cosine learning rate schedule with warmup
+
+## Problem (gradient_clipping): Implement gradient clipping
+
+## Problem (data_loading): Implement data loading
+Note:
+* random.choice 参数replace = False的时候耗时严重
+
+## Problem(checkpointing): Implement model checkpointing
+
+## Problem (training_together): Put it together
+
+## Problem (decoding): Decoding
