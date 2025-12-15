@@ -1,0 +1,27 @@
+batch_size: 32
+clipping_params:
+  max_l2_norm: 0.01
+dataset_name: TinyStoriesV2-GPT4
+eval_epochs: 1000
+model_params:
+  context_length: 256
+  d_ff: 1344
+  d_model: 512
+  num_heads: 16
+  num_layers: 4
+  rope_theta: 10000.0
+  vocab_size: 10000
+name: base
+optimizer_params:
+  betas:
+  - 0.9
+  - 0.999
+  eps: 1.0e-08
+  learning_rate: 0.0003
+  weight_decay: 0.01
+save_every_n_epochs: 1000
+schedule_params:
+  cosine_cycle_iters: 40000
+  min_lr_coeff: 0.1
+  warmup_iters: 500
+train_epochs: 40000

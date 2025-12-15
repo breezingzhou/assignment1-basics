@@ -1,13 +1,14 @@
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
+from pydantic import BaseModel, field_serializer, field_validator
+from pydantic.dataclasses import dataclass
 from pathlib import Path
-import toml
+import yaml
 from common import EXPERIMENT_DIR
 from cs336_basics.model import MyTransformerLM
 from cs336_basics.optimizer import MyAdamW, MyCosineAnnealingLR
 
 
-@dataclass
-class ModelHyperParams:
+class ModelHyperParams(BaseModel):
   vocab_size: int
   context_length: int
   d_model: int
@@ -17,37 +18,39 @@ class ModelHyperParams:
   rope_theta: float
 
 
-@dataclass
-class OptimizerHyperParams:
+class OptimizerHyperParams(BaseModel):
   learning_rate: float
   weight_decay: float
   betas: tuple[float, float]
   eps: float
 
-  def __post_init__(self):
-    if isinstance(self.betas, list):
-      self.betas = (self.betas[0], self.betas[1])
+  @field_validator("betas", mode="before")
+  @classmethod
+  def validate_betas(cls, v):
+    if isinstance(v, list):
+      return (v[0], v[1])
+    return v
 
+  @field_serializer("betas")
+  def serialize_betas(self, v: tuple[float, float]):
+    return list(v)
 
-@dataclass
-class SechduleParams:
+class SechduleParams(BaseModel):
   min_lr_coeff: float
   warmup_iters: int
   cosine_cycle_iters: int
 
 
-@dataclass
-class ClippingParams:
+class ClippingParams(BaseModel):
   max_l2_norm: float = 1e-2
 
 # TODO use pydantic
 
 
-@dataclass
-class ExperimentConfig:
+class ExperimentConfig(BaseModel):
   model_params: ModelHyperParams
   optimizer_params: OptimizerHyperParams
-  schedule_params: SechduleParams | None
+  schedule_params: SechduleParams | None = None
   clipping_params: ClippingParams
 
   train_epochs: int
@@ -79,30 +82,13 @@ class ExperimentConfig:
   @classmethod
   def load_config(cls, path: Path) -> "ExperimentConfig":
     with open(path, 'r') as f:
-      config_dict = toml.load(f)
-    module_params = ModelHyperParams(**config_dict['module_params'])
-    optimizer_params = OptimizerHyperParams(**config_dict['optimizer_params'])
-    schedule_params = SechduleParams(
-        **config_dict['schedule_params']) if 'schedule_params' in config_dict and config_dict['schedule_params'] is not None else None
-    clipping_params = ClippingParams(**config_dict['clipping_params'])
-    config = ExperimentConfig(
-        model_params=module_params,
-        optimizer_params=optimizer_params,
-        schedule_params=schedule_params,
-        clipping_params=clipping_params,
-        train_epochs=config_dict['train_epochs'],
-        eval_epochs=config_dict['eval_epochs'],
-        batch_size=config_dict['batch_size'],
-        dataset_name=config_dict['dataset_name'],
-        name=config_dict['name'],
-        save_every_n_epochs=config_dict['save_every_n_epochs'],
-    )
-    return config
+      config_dict = yaml.safe_load(f)
+    return ExperimentConfig(**config_dict)
 
   def save_config(self, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w') as f:
-      toml.dump(asdict(self), f)
+      yaml.dump(self.model_dump(), f)
 
   def create_llm(self) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
     model = MyTransformerLM(

@@ -1,7 +1,8 @@
 # %%
-from common import CONFIG_DIR, BASE_CONFIG_PATH, ExperimentConfig, save_config, load_config
+from common import CONFIG_DIR, BASE_CONFIG_PATH
+from experiment_config import ExperimentConfig
 # %%
-base_config = load_config(BASE_CONFIG_PATH)
+base_config = ExperimentConfig.load_config(BASE_CONFIG_PATH)
 
 # %%
 
@@ -13,8 +14,8 @@ def experiment_lr(base_config: ExperimentConfig):
     config = base_config
     config.optimizer_params.learning_rate = lr
     config.name = f"base_lr_{lr:.0e}"
-    config_path = CONFIG_DIR / f"base_lr_{lr:.0e}.toml"
-    save_config(config, config_path)
+    config_path = CONFIG_DIR / f"base_lr_{lr:.0e}.yaml"
+    config.save_config(config_path)
 
 
 # %%

@@ -11,7 +11,7 @@ DATA_DIR = WORKSPACE / "data"
 EXPERIMENT_DIR = WORKSPACE / "experiment"
 CHECKPOINT_FINAL_NAME = "checkpoint_final.pth"
 CONFIG_DIR = EXPERIMENT_DIR / "configs"
-BASE_CONFIG_PATH = CONFIG_DIR / "base.toml"
+BASE_CONFIG_PATH = CONFIG_DIR / "base.yaml"
 TMP_DIR = WORKSPACE / "tmp"
 
 
