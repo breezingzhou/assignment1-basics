@@ -43,7 +43,7 @@ def summary_model(config: ExperimentConfig):
   model, _, _ = config.create_llm()
   train_data = load_data(OUTPUT_DIR / f"{config.dataset_name}_train.npy")
   train_loader = MyDataLoader(train_data, config.batch_size,
-                              config.module_params.context_length, device='cpu')
+                              config.model_params.context_length, device='cpu')
   x, y = train_loader[0]
   print(summary(model, input_data=x, verbose=0))
 
@@ -153,13 +153,13 @@ def train(config: ExperimentConfig):
   train_loader = MyDataLoader(
       load_data(OUTPUT_DIR / f"{dataset_name}_train.npy"),
       config.batch_size,
-      config.module_params.context_length,
+      config.model_params.context_length,
       device
   )
   val_loader = MyDataLoader(
       load_data(OUTPUT_DIR / f"{dataset_name}_valid.npy"),
       config.batch_size,
-      config.module_params.context_length,
+      config.model_params.context_length,
       device
   )
   train_prepare(config, model, optimizer, sechdule)
@@ -207,7 +207,7 @@ def validate(config: ExperimentConfig, checkpoint_name: str | None = None):
   val_loader = MyDataLoader(
       load_data(OUTPUT_DIR / f"{dataset_name}_valid.npy"),
       config.batch_size,
-      config.module_params.context_length,
+      config.model_params.context_length,
       device
   )
 

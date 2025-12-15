@@ -45,7 +45,7 @@ class ClippingParams:
 
 @dataclass
 class ExperimentConfig:
-  module_params: ModelHyperParams
+  model_params: ModelHyperParams
   optimizer_params: OptimizerHyperParams
   schedule_params: SechduleParams | None
   clipping_params: ClippingParams
@@ -86,7 +86,7 @@ class ExperimentConfig:
         **config_dict['schedule_params']) if 'schedule_params' in config_dict and config_dict['schedule_params'] is not None else None
     clipping_params = ClippingParams(**config_dict['clipping_params'])
     config = ExperimentConfig(
-        module_params=module_params,
+        model_params=module_params,
         optimizer_params=optimizer_params,
         schedule_params=schedule_params,
         clipping_params=clipping_params,
@@ -106,13 +106,13 @@ class ExperimentConfig:
 
   def create_llm(self) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
     model = MyTransformerLM(
-        vocab_size=self.module_params.vocab_size,
-        context_length=self.module_params.context_length,
-        d_model=self.module_params.d_model,
-        num_layers=self.module_params.num_layers,
-        num_heads=self.module_params.num_heads,
-        d_ff=self.module_params.d_ff,
-        rope_theta=self.module_params.rope_theta
+        vocab_size=self.model_params.vocab_size,
+        context_length=self.model_params.context_length,
+        d_model=self.model_params.d_model,
+        num_layers=self.model_params.num_layers,
+        num_heads=self.model_params.num_heads,
+        d_ff=self.model_params.d_ff,
+        rope_theta=self.model_params.rope_theta
     )
     optimizer = MyAdamW(
         model.parameters(),
