@@ -164,12 +164,11 @@ cython_debug/
 
 /data
 .vscode
-output
-output/*.npy
-output/*_tokens.json
-experiment/*
-!experiment/configs/
-scripts/wandb
-wandb
+/output
+/outputs
+/experiment
+/scripts/wandb
+/wandb
 *.pickle
 /tmp
+!configs/env

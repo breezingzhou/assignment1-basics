@@ -35,6 +35,7 @@ class OptimizerHyperParams(BaseModel):
   def serialize_betas(self, v: tuple[float, float]):
     return list(v)
 
+
 class SechduleParams(BaseModel):
   min_lr_coeff: float
   warmup_iters: int
@@ -114,3 +115,19 @@ class ExperimentConfig(BaseModel):
         min_lr=self.optimizer_params.learning_rate * self.schedule_params.min_lr_coeff
     ) if self.schedule_params else None
     return model, optimizer, sechdule
+
+
+class EnvConfig(BaseModel):
+  workspace: Path
+
+  @property
+  def output_dir(self) -> Path:
+    return self.workspace / "output"
+
+  @property
+  def data_dir(self) -> Path:
+    return self.workspace / "data"
+
+  @property
+  def experiment_dir(self) -> Path:
+    return self.workspace / "experiment"

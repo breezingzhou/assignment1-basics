@@ -1,0 +1,1 @@
+workspace: ${oc.env:REMOTE_WORKSPACE}

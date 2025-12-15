@@ -13,7 +13,7 @@ import wandb
 import sys
 from datetime import datetime
 from pathlib import Path
-from common import CONFIG_DIR, OUTPUT_DIR, WORKSPACE, CHECKPOINT_FINAL_NAME
+from common import OUTPUT_DIR, WORKSPACE, CHECKPOINT_FINAL_NAME
 from experiment_config import ClippingParams, ModelHyperParams, OptimizerHyperParams, SechduleParams, ExperimentConfig
 # %%
 
