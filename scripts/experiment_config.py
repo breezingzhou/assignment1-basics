@@ -2,6 +2,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 import toml
 from common import EXPERIMENT_DIR
+from cs336_basics.model import MyTransformerLM
+from cs336_basics.optimizer import MyAdamW, MyCosineAnnealingLR
 
 
 @dataclass
@@ -101,3 +103,28 @@ class ExperimentConfig:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w') as f:
       toml.dump(asdict(self), f)
+
+  def create_llm(self) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
+    model = MyTransformerLM(
+        vocab_size=self.module_params.vocab_size,
+        context_length=self.module_params.context_length,
+        d_model=self.module_params.d_model,
+        num_layers=self.module_params.num_layers,
+        num_heads=self.module_params.num_heads,
+        d_ff=self.module_params.d_ff,
+        rope_theta=self.module_params.rope_theta
+    )
+    optimizer = MyAdamW(
+        model.parameters(),
+        lr=self.optimizer_params.learning_rate,
+        weight_decay=self.optimizer_params.weight_decay,
+        betas=self.optimizer_params.betas,
+        eps=self.optimizer_params.eps
+    )
+    sechdule = MyCosineAnnealingLR(
+        optimizer,
+        warmup_iters=self.schedule_params.warmup_iters,
+        cosine_cycle_iters=self.schedule_params.cosine_cycle_iters,
+        min_lr=self.optimizer_params.learning_rate * self.schedule_params.min_lr_coeff
+    ) if self.schedule_params else None
+    return model, optimizer, sechdule

@@ -40,7 +40,7 @@ def _setup_base_logger(config: ExperimentConfig):
 
 def summary_model(config: ExperimentConfig):
   from torchinfo import summary
-  model, _, _ = create_from_config(config)
+  model, _, _ = config.create_llm()
   train_data = load_data(OUTPUT_DIR / f"{config.dataset_name}_train.npy")
   x, y = my_get_batch(train_data, config.batch_size,
                       config.module_params.context_length, device='cpu')
@@ -84,31 +84,6 @@ def train_prepare(config: ExperimentConfig, model: MyTransformerLM, optimizer: M
       sechdule.last_epoch = last_epoch
     logging.info(f"Resuming training from epoch {config.train_start_epoch}")
 
-
-def create_from_config(config: ExperimentConfig) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
-  model = MyTransformerLM(
-      vocab_size=config.module_params.vocab_size,
-      context_length=config.module_params.context_length,
-      d_model=config.module_params.d_model,
-      num_layers=config.module_params.num_layers,
-      num_heads=config.module_params.num_heads,
-      d_ff=config.module_params.d_ff,
-      rope_theta=config.module_params.rope_theta
-  )
-  optimizer = MyAdamW(
-      model.parameters(),
-      lr=config.optimizer_params.learning_rate,
-      weight_decay=config.optimizer_params.weight_decay,
-      betas=config.optimizer_params.betas,
-      eps=config.optimizer_params.eps
-  )
-  sechdule = MyCosineAnnealingLR(
-      optimizer,
-      warmup_iters=config.schedule_params.warmup_iters,
-      cosine_cycle_iters=config.schedule_params.cosine_cycle_iters,
-      min_lr=config.optimizer_params.learning_rate * config.schedule_params.min_lr_coeff
-  ) if config.schedule_params else None
-  return model, optimizer, sechdule
 
 # %%
 
@@ -169,7 +144,7 @@ def train_model(
 
 
 def train(config: ExperimentConfig):
-  model, optimizer, sechdule = create_from_config(config)
+  model, optimizer, sechdule = config.create_llm()
   dataset_name = config.dataset_name
   train_data = load_data(OUTPUT_DIR / f"{dataset_name}_train.npy")
   # val_data = load_data(data_path=OUTPUT_DIR / f"{dataset_name}_valid.npy")
@@ -189,7 +164,7 @@ def validate_model(
     config: ExperimentConfig,
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 ):
-  model, optimizer, _ = create_from_config(config)
+  model, optimizer, _ = config.create_llm()
   iteration = my_load_checkpoint(checkpoint_path, model, optimizer)
   print(f"Model loaded from checkpoint at iteration {iteration}")
   model.to(device)
@@ -229,7 +204,7 @@ def inference(input_str: str, config: ExperimentConfig, checkpoint_name: str | N
       special_tokens=["<|endoftext|>"]
   )
 
-  model, optimizer, _ = create_from_config(config)
+  model, optimizer, _ = config.create_llm()
   iteration = my_load_checkpoint(checkpoint_path, model, optimizer)
   model.to(device)
   model.eval()
