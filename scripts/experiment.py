@@ -14,8 +14,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from common import CONFIG_DIR, OUTPUT_DIR, WORKSPACE, CHECKPOINT_FINAL_NAME
-from experiment_config import ClippingParams, ModelHyperParams, OptimizerHyperParams, SechduleParams, ExperimentConfig, save_config, load_config
+from experiment_config import ClippingParams, ModelHyperParams, OptimizerHyperParams, SechduleParams, ExperimentConfig
 # %%
+
 
 def _setup_base_logger(config: ExperimentConfig):
   """配置基础日志格式"""
@@ -67,7 +68,7 @@ def train_prepare(config: ExperimentConfig, model: MyTransformerLM, optimizer: M
   config.experiment_dir.mkdir(parents=True, exist_ok=True)
   config.checkpoint_dir.mkdir(parents=True, exist_ok=True)
   config.snapshot_dir.mkdir(parents=True, exist_ok=True)
-  save_config(config, config.experiment_dir / "config.toml")
+  config.save_config(config.experiment_dir / "config.toml")
 
   # 如果文件夹中有上次的检查点，则加载模型和优化器状态，更新sechdule
   # resume 必须与run_id 配合
@@ -257,14 +258,14 @@ def inference(input_str: str, config: ExperimentConfig, checkpoint_name: str | N
 # %%
 # config_path = CONFIG_DIR / "base_lr_1e-03.toml"
 # run_id = "x46r29n8"
-# config = load_config(config_path)
+# config = ExperimentConfig.load_config(config_path)
 # config.run_id = run_id
 # train(config)
 # %%
 if __name__ == "__main__":
   config_path = Path(sys.argv[1])
   run_id: str | None = sys.argv[2] if len(sys.argv) > 2 else None
-  config = load_config(config_path)
+  config = ExperimentConfig.load_config(config_path)
   config.run_id = run_id
   _setup_base_logger(config)
   train(config)

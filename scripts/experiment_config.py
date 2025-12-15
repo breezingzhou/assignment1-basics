@@ -74,33 +74,30 @@ class ExperimentConfig:
   def log_file(self) -> Path:
     return self.experiment_dir / "logs.log"
 
-# %%
+  @classmethod
+  def load_config(cls, path: Path) -> "ExperimentConfig":
+    with open(path, 'r') as f:
+      config_dict = toml.load(f)
+    module_params = ModelHyperParams(**config_dict['module_params'])
+    optimizer_params = OptimizerHyperParams(**config_dict['optimizer_params'])
+    schedule_params = SechduleParams(
+        **config_dict['schedule_params']) if 'schedule_params' in config_dict and config_dict['schedule_params'] is not None else None
+    clipping_params = ClippingParams(**config_dict['clipping_params'])
+    config = ExperimentConfig(
+        module_params=module_params,
+        optimizer_params=optimizer_params,
+        schedule_params=schedule_params,
+        clipping_params=clipping_params,
+        train_epochs=config_dict['train_epochs'],
+        eval_epochs=config_dict['eval_epochs'],
+        batch_size=config_dict['batch_size'],
+        dataset_name=config_dict['dataset_name'],
+        name=config_dict['name'],
+        save_every_n_epochs=config_dict['save_every_n_epochs'],
+    )
+    return config
 
-
-def load_config(path: Path) -> ExperimentConfig:
-  with open(path, 'r') as f:
-    config_dict = toml.load(f)
-  module_params = ModelHyperParams(**config_dict['module_params'])
-  optimizer_params = OptimizerHyperParams(**config_dict['optimizer_params'])
-  schedule_params = SechduleParams(
-      **config_dict['schedule_params']) if 'schedule_params' in config_dict and config_dict['schedule_params'] is not None else None
-  clipping_params = ClippingParams(**config_dict['clipping_params'])
-  config = ExperimentConfig(
-      module_params=module_params,
-      optimizer_params=optimizer_params,
-      schedule_params=schedule_params,
-      clipping_params=clipping_params,
-      train_epochs=config_dict['train_epochs'],
-      eval_epochs=config_dict['eval_epochs'],
-      batch_size=config_dict['batch_size'],
-      dataset_name=config_dict['dataset_name'],
-      name=config_dict['name'],
-      save_every_n_epochs=config_dict['save_every_n_epochs'],
-  )
-  return config
-
-
-def save_config(config: ExperimentConfig, path: Path):
-  path.parent.mkdir(parents=True, exist_ok=True)
-  with open(path, 'w') as f:
-    toml.dump(asdict(config), f)
+  def save_config(self, path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w') as f:
+      toml.dump(asdict(self), f)
