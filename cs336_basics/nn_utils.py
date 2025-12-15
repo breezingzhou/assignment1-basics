@@ -8,7 +8,8 @@ import numpy as np
 import torch
 
 from jaxtyping import Bool, Float, Int
-from torch import LongTensor, Tensor
+from torch import Tensor
+from torch.utils.data import Dataset, DataLoader
 import numpy.typing as npt
 # %%
 
@@ -132,6 +133,18 @@ def my_get_batch(dataset: npt.NDArray, batch_size: int, context_length: int, dev
   pair = torch.from_numpy(pair_ndarray).to(device, dtype=torch.int64)
   return pair[::, :-1], pair[::, 1:]
 
+
+class MyDataLoader(Dataset):
+  def __init__(self, array: Int[np.ndarray, "idx"], batch_size: int, context_length: int, device: str):
+    self.array = array
+    self.batch_size = batch_size
+    self.context_length = context_length
+    self.device = device
+
+  def __getitem__(self, _):
+    return my_get_batch(self.array, self.batch_size, self.context_length, self.device)
+
+
 # %%
 
 
@@ -146,10 +159,11 @@ def my_save_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer,
   torch.save(checkpoint, out)
 
 
-def my_load_checkpoint(src: str | os.PathLike | BinaryIO | IO[bytes], model: torch.nn.Module, optimizer: torch.optim.Optimizer) -> int:
+def my_load_checkpoint(src: str | os.PathLike | BinaryIO | IO[bytes], model: torch.nn.Module, optimizer: torch.optim.Optimizer | None = None) -> int:
   checkpoint = torch.load(src)
   model.load_state_dict(checkpoint["model_state"])
-  optimizer.load_state_dict(checkpoint["optimizer_state"])
+  if optimizer is not None:
+    optimizer.load_state_dict(checkpoint["optimizer_state"])
   return checkpoint["iteration"]
 
 

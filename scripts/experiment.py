@@ -3,7 +3,7 @@
 from dataclasses import asdict
 from cs336_basics.model import MyTransformerLM
 from cs336_basics.optimizer import MyAdamW, MyCosineAnnealingLR
-from cs336_basics.nn_utils import my_cross_entropy, my_get_batch, my_save_checkpoint, my_load_checkpoint, my_gradient_clipping, my_save_xy_snapshot
+from cs336_basics.nn_utils import my_cross_entropy, MyDataLoader, my_save_checkpoint, my_load_checkpoint, my_gradient_clipping, my_save_xy_snapshot
 from cs336_basics.tokenizer import BpeTokenizer
 from tests.test_tokenizer import get_tokenizer_from_vocab_merges_path
 import logging
@@ -42,8 +42,9 @@ def summary_model(config: ExperimentConfig):
   from torchinfo import summary
   model, _, _ = config.create_llm()
   train_data = load_data(OUTPUT_DIR / f"{config.dataset_name}_train.npy")
-  x, y = my_get_batch(train_data, config.batch_size,
-                      config.module_params.context_length, device='cpu')
+  train_loader = MyDataLoader(train_data, config.batch_size,
+                              config.module_params.context_length, device='cpu')
+  x, y = train_loader[0]
   print(summary(model, input_data=x, verbose=0))
 
 
@@ -92,8 +93,8 @@ def train_model(
     model: MyTransformerLM,
     optimizer: MyAdamW,
     sechdule: MyCosineAnnealingLR | None,
-    train_data: np.ndarray,
-    val_data: np.ndarray | None,
+    train_loader: MyDataLoader,
+    val_loader: MyDataLoader | None,
     config: ExperimentConfig,
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 ):
@@ -108,8 +109,7 @@ def train_model(
       if epoch % process_every_n_epochs == 0:
         logging.debug(f"Starting epoch {epoch}/{config.train_epochs}")
       optimizer.zero_grad()
-      x, y = my_get_batch(train_data, config.batch_size,
-                          config.module_params.context_length, device)
+      x, y = train_loader[epoch]
       logits = model(x)
       loss = my_cross_entropy(logits, y)
       # print(f"memory_allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
@@ -145,13 +145,24 @@ def train_model(
 
 def train(config: ExperimentConfig):
   model, optimizer, sechdule = config.create_llm()
+  device = 'cuda' if torch.cuda.is_available() else 'cpu'
   dataset_name = config.dataset_name
-  train_data = load_data(OUTPUT_DIR / f"{dataset_name}_train.npy")
-  # val_data = load_data(data_path=OUTPUT_DIR / f"{dataset_name}_valid.npy")
+  train_loader = MyDataLoader(
+      load_data(OUTPUT_DIR / f"{dataset_name}_train.npy"),
+      config.batch_size,
+      config.module_params.context_length,
+      device
+  )
+  val_loader = MyDataLoader(
+      load_data(OUTPUT_DIR / f"{dataset_name}_valid.npy"),
+      config.batch_size,
+      config.module_params.context_length,
+      device
+  )
   train_prepare(config, model, optimizer, sechdule)
 
   # torch.cuda.memory._record_memory_history()
-  train_model(model, optimizer, sechdule, train_data, None, config)
+  train_model(model, optimizer, sechdule, train_loader, None, config)
   # torch.cuda.memory._dump_snapshot("my_snapshot.pickle")
 
 
@@ -159,36 +170,45 @@ def train(config: ExperimentConfig):
 
 
 def validate_model(
-    checkpoint_path: Path,
-    val_data: np.ndarray,
+    model: MyTransformerLM,
+    val_loader: MyDataLoader,
     config: ExperimentConfig,
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 ):
-  model, optimizer, _ = config.create_llm()
-  iteration = my_load_checkpoint(checkpoint_path, model, optimizer)
-  print(f"Model loaded from checkpoint at iteration {iteration}")
+
   model.to(device)
   model.eval()
 
   with torch.no_grad():
     losses = []
     for epoch in range(config.eval_epochs):
-      x, y = my_get_batch(val_data, config.batch_size,
-                          config.module_params.context_length, device, seed=epoch)
+      x, y = val_loader[epoch]
       logits = model(x)
       loss = my_cross_entropy(logits, y)
       losses.append(loss.item())
 
-    print(f"Validation loss: {sum(losses) / len(losses):.4f}")
+    logging.info(f"Validation loss: {sum(losses) / len(losses):.4f}")
 
 
 # %%
 def validate(config: ExperimentConfig, checkpoint_name: str | None = None):
-  dataset_name = config.dataset_name
-  val_data = load_data(data_path=OUTPUT_DIR / f"{dataset_name}-valid.npy")
   checkpoint_name = checkpoint_name or CHECKPOINT_FINAL_NAME
   checkpoint_path = config.checkpoint_dir / checkpoint_name
-  validate_model(checkpoint_path, val_data, config)
+  device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+  model, _, _ = config.create_llm()
+  iteration = my_load_checkpoint(checkpoint_path, model)
+  logging.info(f"Model loaded from checkpoint at iteration {iteration}")
+
+  dataset_name = config.dataset_name
+  val_loader = MyDataLoader(
+      load_data(OUTPUT_DIR / f"{dataset_name}_valid.npy"),
+      config.batch_size,
+      config.module_params.context_length,
+      device
+  )
+
+  validate_model(model, val_loader, config, device)
 
 # %%
 
