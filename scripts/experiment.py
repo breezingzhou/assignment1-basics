@@ -6,6 +6,7 @@ from cs336_basics.optimizer import MyAdamW, MyCosineAnnealingLR
 from cs336_basics.nn_utils import my_cross_entropy, my_get_batch, my_save_checkpoint, my_load_checkpoint, my_gradient_clipping, my_save_xy_snapshot
 from cs336_basics.tokenizer import BpeTokenizer
 from tests.test_tokenizer import get_tokenizer_from_vocab_merges_path
+import logging
 import torch
 import numpy as np
 import wandb
@@ -14,6 +15,25 @@ from datetime import datetime
 from pathlib import Path
 from common import CONFIG_DIR, OUTPUT_DIR, WORKSPACE, CHECKPOINT_FINAL_NAME, ClippingParams, ModelHyperParams, OptimizerHyperParams, SechduleParams, ExperimentConfig, save_config, load_config
 # %%
+
+def _setup_base_logger(config: ExperimentConfig):
+  """配置基础日志格式"""
+  log_format = "%(asctime)s - %(levelname)s - %(message)s"
+  formatter = logging.Formatter(log_format)
+
+  # 初始化logger
+  logger = logging.getLogger(config.name)
+  logger.setLevel(logging.DEBUG)
+
+  # 控制台Handler
+  console_handler = logging.StreamHandler()
+  console_handler.setFormatter(formatter)
+  logger.addHandler(console_handler)
+
+  # 文件Handler
+  file_handler = logging.FileHandler(config.log_file, mode="a", encoding="utf-8")
+  file_handler.setFormatter(formatter)
+  logger.addHandler(file_handler)
 
 
 def summary_model(config: ExperimentConfig):
@@ -55,12 +75,12 @@ def train_prepare(config: ExperimentConfig, model: MyTransformerLM, optimizer: M
       config.run_id is not None), "run_id should be set only if training is resumed"
 
   if last_checkpoint:
-    print(f"Resuming from checkpoint: {last_checkpoint}")
+    logging.info(f"Resuming from checkpoint: {last_checkpoint}")
     last_epoch = my_load_checkpoint(last_checkpoint, model, optimizer)
     config.train_start_epoch = last_epoch + 1
     if sechdule:
       sechdule.last_epoch = last_epoch
-    print(f"Resuming training from epoch {config.train_start_epoch}")
+    logging.info(f"Resuming training from epoch {config.train_start_epoch}")
 
 
 def create_from_config(config: ExperimentConfig) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
@@ -106,9 +126,10 @@ def train_model(
   resume = "must" if config.run_id else "allow"
 
   with wandb.init(project=config.dataset_name, config=asdict(config), name=config.name, dir=WORKSPACE, id=config.run_id, resume=resume) as run:
+    process_every_n_epochs = config.train_epochs // 100
     for epoch in range(config.train_start_epoch, config.train_epochs):
-      if epoch % 10 == 0:
-        print(f"Starting epoch {epoch}/{config.train_epochs}")
+      if epoch % process_every_n_epochs == 0:
+        logging.debug(f"Starting epoch {epoch}/{config.train_epochs}")
       optimizer.zero_grad()
       x, y = my_get_batch(train_data, config.batch_size,
                           config.module_params.context_length, device)
@@ -134,12 +155,12 @@ def train_model(
         snapshot_path = config.snapshot_dir / f"snapshot_iter_{epoch}.pt"
         my_save_checkpoint(model, optimizer, epoch, checkpoint_path)
         my_save_xy_snapshot(x, y, logits, snapshot_path)
-        print(f"Checkpoint saved at iteration {epoch}")
+        logging.info(f"Checkpoint saved at iteration {epoch}")
 
   # Final checkpoint
   my_save_checkpoint(model, optimizer, config.train_epochs,
                      config.checkpoint_dir / CHECKPOINT_FINAL_NAME)
-  print("Training completed")
+  logging.debug("Training completed")
 
 
 # %%
@@ -244,4 +265,5 @@ if __name__ == "__main__":
   run_id: str | None = sys.argv[2] if len(sys.argv) > 2 else None
   config = load_config(config_path)
   config.run_id = run_id
+  _setup_base_logger(config)
   train(config)

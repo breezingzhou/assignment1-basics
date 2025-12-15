@@ -74,16 +74,20 @@ class ExperimentConfig:
   train_start_epoch: int = 0
 
   @property
+  def experiment_dir(self) -> Path:
+    return EXPERIMENT_DIR / self.name
+
+  @property
   def checkpoint_dir(self) -> Path:
-    return EXPERIMENT_DIR / self.name / "checkpoints"
+    return self.experiment_dir / "checkpoints"
 
   @property
   def snapshot_dir(self) -> Path:
-    return EXPERIMENT_DIR / self.name / "snapshots"
+    return self.experiment_dir / "snapshots"
 
   @property
-  def experiment_dir(self) -> Path:
-    return EXPERIMENT_DIR / self.name
+  def log_file(self) -> Path:
+    return self.experiment_dir / "logs.log"
 
 # %%
 
