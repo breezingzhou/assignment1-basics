@@ -61,24 +61,7 @@ class ExperimentConfig(BaseModel):
   dataset_name: str
   name: str
   save_every_n_epochs: int
-  run_id: str | None = None
   train_start_epoch: int = 0
-
-  @property
-  def experiment_dir(self) -> Path:
-    return EXPERIMENT_DIR / self.name
-
-  @property
-  def checkpoint_dir(self) -> Path:
-    return self.experiment_dir / "checkpoints"
-
-  @property
-  def snapshot_dir(self) -> Path:
-    return self.experiment_dir / "snapshots"
-
-  @property
-  def log_file(self) -> Path:
-    return self.experiment_dir / "logs.log"
 
   @classmethod
   def load_config(cls, path: Path) -> "ExperimentConfig":
@@ -129,5 +112,39 @@ class EnvConfig(BaseModel):
     return self.workspace / "data"
 
   @property
+  def experiments_dir(self) -> Path:
+    return self.workspace / "experiments"
+
+
+class Config(BaseModel):
+  env: EnvConfig
+  experiment: ExperimentConfig
+  run_id: str | None = None
+
+  @property
+  def output_dir(self) -> Path:
+    return self.env.output_dir
+
+  @property
+  def data_dir(self) -> Path:
+    return self.env.data_dir
+
+  @property
+  def experiments_dir(self) -> Path:
+    return self.env.experiments_dir
+
+  @property
   def experiment_dir(self) -> Path:
-    return self.workspace / "experiment"
+    return self.env.workspace / self.experiment.name
+
+  @property
+  def checkpoint_dir(self) -> Path:
+    return self.experiment_dir / "checkpoints"
+
+  @property
+  def snapshot_dir(self) -> Path:
+    return self.experiment_dir / "snapshots"
+
+  @property
+  def log_file(self) -> Path:
+    return self.experiment_dir / "logs.log"

@@ -22,3 +22,4 @@ optimizer_params:
 save_every_n_epochs: 1000
 schedule_params: null
 train_epochs: 40000
+train_start_epoch: 0

@@ -1,30 +1,30 @@
 # %%
 
-from dataclasses import asdict
 from cs336_basics.model import MyTransformerLM
 from cs336_basics.optimizer import MyAdamW, MyCosineAnnealingLR
 from cs336_basics.nn_utils import my_cross_entropy, MyDataLoader, my_save_checkpoint, my_load_checkpoint, my_gradient_clipping, my_save_xy_snapshot
 from cs336_basics.tokenizer import BpeTokenizer
 from tests.test_tokenizer import get_tokenizer_from_vocab_merges_path
+
+import hydra
 import logging
 import torch
 import numpy as np
 import wandb
-import sys
-from datetime import datetime
 from pathlib import Path
-from common import OUTPUT_DIR, WORKSPACE, CHECKPOINT_FINAL_NAME
-from experiment_config import ClippingParams, ModelHyperParams, OptimizerHyperParams, SechduleParams, ExperimentConfig
+
+from common import CONFIG_DIR, CHECKPOINT_FINAL_NAME
+from experiment_config import Config, ExperimentConfig
 # %%
 
 
-def _setup_base_logger(config: ExperimentConfig):
+def _setup_base_logger(config: Config):
   """配置基础日志格式"""
   log_format = "%(asctime)s - %(levelname)s - %(message)s"
   formatter = logging.Formatter(log_format)
 
   # 初始化logger
-  logger = logging.getLogger(config.name)
+  logger = logging.getLogger(config.experiment.name)
   logger.setLevel(logging.DEBUG)
 
   # 控制台Handler
@@ -38,12 +38,12 @@ def _setup_base_logger(config: ExperimentConfig):
   logger.addHandler(file_handler)
 
 
-def summary_model(config: ExperimentConfig):
+def summary_model(config: Config):
   from torchinfo import summary
-  model, _, _ = config.create_llm()
-  train_data = load_data(OUTPUT_DIR / f"{config.dataset_name}_train.npy")
-  train_loader = MyDataLoader(train_data, config.batch_size,
-                              config.model_params.context_length, device='cpu')
+  model, _, _ = config.experiment.create_llm()
+  train_data = load_data(config.output_dir / f"{config.experiment.dataset_name}_train.npy")
+  train_loader = MyDataLoader(train_data, config.experiment.batch_size,
+                              config.experiment.model_params.context_length, device='cpu')
   x, y = train_loader[0]
   print(summary(model, input_data=x, verbose=0))
 
@@ -64,12 +64,12 @@ def get_last_checkpoint(checkpoint_dir: Path) -> Path | None:
   return last_checkpoint
 
 
-def train_prepare(config: ExperimentConfig, model: MyTransformerLM, optimizer: MyAdamW, sechdule: MyCosineAnnealingLR | None):
+def train_prepare(config: Config, model: MyTransformerLM, optimizer: MyAdamW, sechdule: MyCosineAnnealingLR | None):
   # 创建相应文件夹
   config.experiment_dir.mkdir(parents=True, exist_ok=True)
   config.checkpoint_dir.mkdir(parents=True, exist_ok=True)
   config.snapshot_dir.mkdir(parents=True, exist_ok=True)
-  config.save_config(config.experiment_dir / "config.toml")
+  config.experiment.save_config(config.experiment_dir / "config.yaml")
 
   # 如果文件夹中有上次的检查点，则加载模型和优化器状态，更新sechdule
   # resume 必须与run_id 配合
@@ -80,10 +80,10 @@ def train_prepare(config: ExperimentConfig, model: MyTransformerLM, optimizer: M
   if last_checkpoint:
     logging.info(f"Resuming from checkpoint: {last_checkpoint}")
     last_epoch = my_load_checkpoint(last_checkpoint, model, optimizer)
-    config.train_start_epoch = last_epoch + 1
+    config.experiment.train_start_epoch = last_epoch + 1
     if sechdule:
       sechdule.last_epoch = last_epoch
-    logging.info(f"Resuming training from epoch {config.train_start_epoch}")
+    logging.info(f"Resuming training from epoch {config.experiment.train_start_epoch}")
 
 
 # %%
@@ -95,7 +95,7 @@ def train_model(
     sechdule: MyCosineAnnealingLR | None,
     train_loader: MyDataLoader,
     val_loader: MyDataLoader | None,
-    config: ExperimentConfig,
+    config: Config,
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 ):
   model.to(device)
@@ -103,11 +103,11 @@ def train_model(
   model.train()
   resume = "must" if config.run_id else "allow"
 
-  with wandb.init(project=config.dataset_name, config=asdict(config), name=config.name, dir=WORKSPACE, id=config.run_id, resume=resume) as run:
-    process_every_n_epochs = config.train_epochs // 100
-    for epoch in range(config.train_start_epoch, config.train_epochs):
-      if epoch % process_every_n_epochs == 0:
-        logging.debug(f"Starting epoch {epoch}/{config.train_epochs}")
+  with wandb.init(project=config.experiment.dataset_name, config=config.experiment.model_dump(), name=config.experiment.name, dir=config.env.workspace, id=config.run_id, resume=resume) as run:
+    debug_every_n_epochs = config.experiment.train_epochs // 100
+    for epoch in range(config.experiment.train_start_epoch, config.experiment.train_epochs):
+      if epoch % debug_every_n_epochs == 0:
+        logging.debug(f"Starting epoch {epoch}/{config.experiment.train_epochs}")
       optimizer.zero_grad()
       x, y = train_loader[epoch]
       logits = model(x)
@@ -116,7 +116,7 @@ def train_model(
       # print(f"memory_reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
       loss.backward()
       grad_norm, clip_coef = my_gradient_clipping(
-          model.parameters(), config.clipping_params.max_l2_norm)
+          model.parameters(), config.experiment.clipping_params.max_l2_norm)
 
       optimizer.step()
       if sechdule:
@@ -124,13 +124,13 @@ def train_model(
 
       run.log({
           "train_loss": loss.item(),
-          "lr": sechdule.get_last_lr()[0] if sechdule else config.optimizer_params.learning_rate,
+          "lr": sechdule.get_last_lr()[0] if sechdule else config.experiment.optimizer_params.learning_rate,
           "grad_norm": grad_norm,
           "grad_clip_coef": clip_coef,
       }, step=epoch)
 
       # Save checkpoint periodically
-      if epoch % config.save_every_n_epochs == 0 and epoch != 0:
+      if epoch % config.experiment.save_every_n_epochs == 0 and epoch != 0:
         checkpoint_path = config.checkpoint_dir / f"checkpoint_iter_{epoch}.pt"
         snapshot_path = config.snapshot_dir / f"snapshot_iter_{epoch}.pt"
         my_save_checkpoint(model, optimizer, epoch, checkpoint_path)
@@ -138,7 +138,7 @@ def train_model(
         logging.info(f"Checkpoint saved at iteration {epoch}")
 
   # Final checkpoint
-  my_save_checkpoint(model, optimizer, config.train_epochs,
+  my_save_checkpoint(model, optimizer, config.experiment.train_epochs,
                      config.checkpoint_dir / CHECKPOINT_FINAL_NAME)
   logging.debug("Training completed")
 
@@ -146,20 +146,20 @@ def train_model(
 # %%
 
 
-def train(config: ExperimentConfig):
-  model, optimizer, sechdule = config.create_llm()
+def train(config: Config):
+  model, optimizer, sechdule = config.experiment.create_llm()
   device = 'cuda' if torch.cuda.is_available() else 'cpu'
-  dataset_name = config.dataset_name
+  dataset_name = config.experiment.dataset_name
   train_loader = MyDataLoader(
-      load_data(OUTPUT_DIR / f"{dataset_name}_train.npy"),
-      config.batch_size,
-      config.model_params.context_length,
+      load_data(config.output_dir / f"{dataset_name}_train.npy"),
+      config.experiment.batch_size,
+      config.experiment.model_params.context_length,
       device
   )
   val_loader = MyDataLoader(
-      load_data(OUTPUT_DIR / f"{dataset_name}_valid.npy"),
-      config.batch_size,
-      config.model_params.context_length,
+      load_data(config.output_dir / f"{dataset_name}_valid.npy"),
+      config.experiment.batch_size,
+      config.experiment.model_params.context_length,
       device
   )
   train_prepare(config, model, optimizer, sechdule)
@@ -175,7 +175,7 @@ def train(config: ExperimentConfig):
 def validate_model(
     model: MyTransformerLM,
     val_loader: MyDataLoader,
-    config: ExperimentConfig,
+    config: Config,
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 ):
 
@@ -184,50 +184,53 @@ def validate_model(
 
   with torch.no_grad():
     losses = []
-    for epoch in range(config.eval_epochs):
+    for epoch in range(config.experiment.eval_epochs):
       x, y = val_loader[epoch]
       logits = model(x)
       loss = my_cross_entropy(logits, y)
       losses.append(loss.item())
 
-    logging.info(f"Validation loss: {sum(losses) / len(losses):.4f}")
+  val_loss = sum(losses) / len(losses)
+  logging.info(f"Validation loss: {val_loss:.4f}")
+  return val_loss
 
 
 # %%
-def validate(config: ExperimentConfig, checkpoint_name: str | None = None):
+def validate(config: Config, checkpoint_name: str | None = None):
   checkpoint_name = checkpoint_name or CHECKPOINT_FINAL_NAME
   checkpoint_path = config.checkpoint_dir / checkpoint_name
   device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-  model, _, _ = config.create_llm()
+  model, _, _ = config.experiment.create_llm()
   iteration = my_load_checkpoint(checkpoint_path, model)
   logging.info(f"Model loaded from checkpoint at iteration {iteration}")
 
-  dataset_name = config.dataset_name
+  dataset_name = config.experiment.dataset_name
   val_loader = MyDataLoader(
-      load_data(OUTPUT_DIR / f"{dataset_name}_valid.npy"),
-      config.batch_size,
-      config.model_params.context_length,
+      load_data(config.output_dir / f"{dataset_name}_valid.npy"),
+      config.experiment.batch_size,
+      config.experiment.model_params.context_length,
       device
   )
 
-  validate_model(model, val_loader, config, device)
+  val_loss = validate_model(model, val_loader, config, device)
+  return val_loss
 
 # %%
 
 
-def inference(input_str: str, config: ExperimentConfig, checkpoint_name: str | None, inference_num: int = 100, device: str = 'cuda' if torch.cuda.is_available() else 'cpu'):
+def inference(input_str: str, config: Config, checkpoint_name: str | None, inference_num: int = 100, device: str = 'cuda' if torch.cuda.is_available() else 'cpu'):
   checkpoint_name = checkpoint_name or CHECKPOINT_FINAL_NAME
   checkpoint_path = config.checkpoint_dir / checkpoint_name
 
-  dataset_name = config.dataset_name
+  dataset_name = config.experiment.dataset_name
   tokenizer: BpeTokenizer = get_tokenizer_from_vocab_merges_path(
-      OUTPUT_DIR / f"{dataset_name}_vocab.json",
-      OUTPUT_DIR / f"{dataset_name}_merges.txt",
+      config.output_dir / f"{dataset_name}_vocab.json",
+      config.output_dir / f"{dataset_name}_merges.txt",
       special_tokens=["<|endoftext|>"]
   )
 
-  model, optimizer, _ = config.create_llm()
+  model, optimizer, _ = config.experiment.create_llm()
   iteration = my_load_checkpoint(checkpoint_path, model, optimizer)
   model.to(device)
   model.eval()
@@ -245,25 +248,15 @@ def inference(input_str: str, config: ExperimentConfig, checkpoint_name: str | N
   print(f"Predicted token IDs: {predicted_ids}")
   print(f"Predicted text: {predicted_text}")
 
-# %%
-
 
 # %%
-# train(config)
-# %%
-# input_str = "Tom and Lily were playing with their toys in the living room. They liked to build towers and bridges with their blocks and cars."
-# inference(input_str, config, checkpoint_name=None, inference_num=200)
-# %%
-# config_path = CONFIG_DIR / "base_lr_1e-03.toml"
-# run_id = "x46r29n8"
-# config = ExperimentConfig.load_config(config_path)
-# config.run_id = run_id
-# train(config)
-# %%
-if __name__ == "__main__":
-  config_path = Path(sys.argv[1])
-  run_id: str | None = sys.argv[2] if len(sys.argv) > 2 else None
-  config = ExperimentConfig.load_config(config_path)
-  config.run_id = run_id
+@hydra.main(version_base=None, config_path=str(CONFIG_DIR), config_name="config")
+def main(cfg):
+  config = Config(**cfg)
   _setup_base_logger(config)
   train(config)
+
+
+# %%
+if __name__ == "__main__":
+  main()  # 调用主函数
