@@ -115,7 +115,8 @@ def train_model(
       # print(f"memory_allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
       # print(f"memory_reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
       loss.backward()
-      my_gradient_clipping(model.parameters(), config.clipping_params.max_l2_norm)
+      grad_norm, clip_coef = my_gradient_clipping(
+          model.parameters(), config.clipping_params.max_l2_norm)
 
       optimizer.step()
       if sechdule:
@@ -123,7 +124,9 @@ def train_model(
 
       run.log({
           "train_loss": loss.item(),
-          "lr": sechdule.get_last_lr()[0] if sechdule else config.optimizer_params.learning_rate
+          "lr": sechdule.get_last_lr()[0] if sechdule else config.optimizer_params.learning_rate,
+          "grad_norm": grad_norm,
+          "grad_clip_coef": clip_coef,
       }, step=epoch)
 
       # Save checkpoint periodically
