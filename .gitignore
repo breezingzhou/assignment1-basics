@@ -164,6 +164,7 @@ cython_debug/
 
 /data
 .vscode
+output
 output/*.npy
 output/*_tokens.json
 experiment/*
