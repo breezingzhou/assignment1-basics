@@ -6,22 +6,34 @@ from dataclasses import dataclass
 import gzip
 from pathlib import Path
 import sys
+import hydra
+from hydra.utils import to_absolute_path
 from unitoken import BpeTrainer, BpeEncoder, PreTokenizer
-from common import DATA_DIR, OUTPUT_DIR
+from common import CONFIG_DIR
 import numpy as np
 import requests
+
+from scripts.experiment_config import Config, EnvConfig
 # %%
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # %%
 
 
 @dataclass
-class Config:
+class PrepareConfig:
   dataset_name: str
   vocab_size: int
   special_tokens: list[str]
   num_chunks: int
-  download_fn: Callable[[], None]
+  download_fn: Callable[["PrepareConfig"], None]
+  workspace: Path
+
+  @property
+  def data_dir(self) -> Path:
+    return self.workspace / "data"
+
+  @property
+  def output_dir(self) -> Path:
+    return self.workspace / "output"
 
 # %%
 
@@ -58,37 +70,37 @@ def decompress_gz_file(gz_path: Path, output_path: Path, chunk_size=1024 * 1024)
     print(f"Decompression failed: {e}")
 
 
-def download_tinystory():
+def download_tinystory(config: PrepareConfig):
   train_url = "https://huggingface.co/datasets/roneneldan/TinyStories/resolve/main/TinyStoriesV2-GPT4-train.txt"
   valid_url = "https://huggingface.co/datasets/roneneldan/TinyStories/resolve/main/TinyStoriesV2-GPT4-valid.txt"
-  train_file = DATA_DIR / "TinyStoriesV2-GPT4_train.txt"
-  valid_file = DATA_DIR / "TinyStoriesV2-GPT4_valid.txt"
+  train_file = config.data_dir / "TinyStoriesV2-GPT4_train.txt"
+  valid_file = config.data_dir / "TinyStoriesV2-GPT4_valid.txt"
   download_file(train_url, train_file)
   download_file(valid_url, valid_file)
 
 
-def download_owt():
+def download_owt(config: PrepareConfig):
   train_url = "https://huggingface.co/datasets/stanford-cs336/owt-sample/resolve/main/owt_train.txt.gz"
   valid_url = "https://huggingface.co/datasets/stanford-cs336/owt-sample/resolve/main/owt_valid.txt.gz"
-  train_gzfile = DATA_DIR / "owt_train.txt.gz"
-  valid_gzfile = DATA_DIR / "owt_valid.txt.gz"
-  train_file = DATA_DIR / "owt_train.txt"
-  valid_file = DATA_DIR / "owt_valid.txt"
+  train_gzfile = config.data_dir / "owt_train.txt.gz"
+  valid_gzfile = config.data_dir / "owt_valid.txt.gz"
+  train_file = config.data_dir / "owt_train.txt"
+  valid_file = config.data_dir / "owt_valid.txt"
   download_file(train_url, train_gzfile)
   download_file(valid_url, valid_gzfile)
   decompress_gz_file(train_gzfile, train_file)
   decompress_gz_file(valid_gzfile, valid_file)
 
 
-def download_dataset(config: Config):
-  config.download_fn()
+def download_dataset(config: PrepareConfig):
+  config.download_fn(config)
 
 
-def bpe_train(config: Config):
+def bpe_train(config: PrepareConfig):
   # 生成vocab和merges文件
-  input_file = DATA_DIR / f"{config.dataset_name}_train.txt"
-  vocab_file = OUTPUT_DIR / f"vocab.{config.dataset_name}[u8].json"
-  merges_file = OUTPUT_DIR / f"merges.{config.dataset_name}[u8].txt"
+  input_file = config.data_dir / f"{config.dataset_name}_train.txt"
+  vocab_file = config.output_dir / f"vocab.{config.dataset_name}[u8].json"
+  merges_file = config.output_dir / f"merges.{config.dataset_name}[u8].txt"
   if vocab_file.exists() and merges_file.exists():
     print(f"Vocab and merges files already exist for {config.dataset_name}, skipping BPE training.")
     return
@@ -110,17 +122,17 @@ def bpe_train(config: Config):
   trainer.train(num_steps=config.vocab_size)
   trainer.save(
       config.dataset_name,
-      outdir=OUTPUT_DIR
+      outdir=config.output_dir
   )
   print("BPE training completed")
 
 
-def bpe_encode(config: Config):
+def bpe_encode(config: PrepareConfig):
   encoder = None
 
   for group in ["train", "valid"]:
-    input_file = DATA_DIR / f"{config.dataset_name}_{group}.txt"
-    output_file = OUTPUT_DIR / f"idxs.{input_file.stem}.npy"
+    input_file = config.data_dir / f"{config.dataset_name}_{group}.txt"
+    output_file = config.output_dir / f"idxs.{input_file.stem}.npy"
     if output_file.exists():
       print(
           f"Encoded idxs file already exists at {output_file}, skipping BPE encoding for {group}.")
@@ -128,7 +140,7 @@ def bpe_encode(config: Config):
 
     print(f"Starting BPE encoding for {config.dataset_name} {group}")
     if encoder is None:
-      encoder = BpeEncoder.load(name=config.dataset_name, input_dir=OUTPUT_DIR)
+      encoder = BpeEncoder.load(name=config.dataset_name, input_dir=config.output_dir)
     idxs = encoder.encode_file(
         path=input_file,
         num_chunks=config.num_chunks
@@ -139,37 +151,50 @@ def bpe_encode(config: Config):
 
 
 # %%
-tiny_story_config = Config(
+tiny_story_config = PrepareConfig(
     dataset_name="TinyStoriesV2-GPT4",
     vocab_size=10000,
     special_tokens=["<|endoftext|>"],
-    num_chunks=32,
+    num_chunks=64,
     download_fn=download_tinystory,
+    workspace=Path(__file__).parent,
 )
 
-owt_config = Config(
+owt_config = PrepareConfig(
     dataset_name="owt",
     vocab_size=32000,
     special_tokens=["<|endoftext|>"],
     num_chunks=256,
     download_fn=download_owt,
+    workspace=Path(__file__).parent,
 )
 name_2_config = {
-    "tinystory": tiny_story_config,
+    "TinyStoriesV2-GPT4": tiny_story_config,
     "owt": owt_config,
 }
 # %%
 # bpe_train(config=tiny_story_config)
 # bpe_encode(config=tiny_story_config)
 # %%
+
+
+@hydra.main(version_base=None, config_path=str(CONFIG_DIR), config_name="config")
+def main(cfg):
+  workspace = Path(to_absolute_path(cfg.env.workspace))
+  env = EnvConfig(workspace=workspace)
+  kwargs = dict(cfg)
+  kwargs['env'] = env
+  config = Config(**kwargs)
+
+  prepare_config = name_2_config[config.experiment.dataset_name]
+  prepare_config.workspace = workspace
+  prepare_config.output_dir.mkdir(parents=True, exist_ok=True)
+
+  download_dataset(prepare_config)
+  bpe_train(prepare_config)
+  bpe_encode(prepare_config)
+
+
 # %%
 if __name__ == "__main__":
-  dataset_name = sys.argv[1]
-  if name_2_config.get(dataset_name) is None:
-    print(f"Unknown dataset name: {dataset_name}")
-    print("Available dataset names:", list(name_2_config.keys()))
-    sys.exit(1)
-  config = name_2_config[dataset_name]
-  download_dataset(config)
-  bpe_train(config)
-  bpe_encode(config)
+  main()

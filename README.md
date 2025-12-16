@@ -53,6 +53,8 @@ cd ..
 export REMOTE_WORKSPACE='xxx'
 cat ~/.netrc
 wandb login <your-api-key>
+python ./scripts/prepare.py experiment.dataset_name=TinyStoriesV2-GPT4 env=local
+
 python ./scripts/experiment.py experiment=base_lr_1e-03
 or
 python ./scripts/experiment.py env=remote experiment=base_lr_1e-03 log_level=20 run_id="xxx"
