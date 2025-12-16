@@ -1,10 +1,7 @@
-from dataclasses import asdict
 import logging
 from pydantic import BaseModel, field_serializer, field_validator
-from pydantic.dataclasses import dataclass
 from pathlib import Path
 import yaml
-from common import EXPERIMENT_DIR
 from cs336_basics.model import MyTransformerLM
 from cs336_basics.optimizer import MyAdamW, MyCosineAnnealingLR
 

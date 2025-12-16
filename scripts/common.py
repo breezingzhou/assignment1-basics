@@ -8,8 +8,9 @@ from tests.common import gpt2_bytes_to_unicode
 WORKSPACE = Path(__file__).parent.parent
 OUTPUT_DIR = WORKSPACE / "output"
 DATA_DIR = WORKSPACE / "data"
-EXPERIMENT_DIR = WORKSPACE / "experiment"
-CHECKPOINT_FINAL_NAME = "checkpoint_final.pth"
+# EXPERIMENT_DIR = WORKSPACE / "experiments"
+
+CHECKPOINT_FINAL_NAME = "checkpoint_final.pt"
 CONFIG_DIR = WORKSPACE / "configs"
 EXPERIMENT_CONFIG_DIR = CONFIG_DIR / "experiment"
 BASE_EXPERIMENT_CONFIG_PATH = EXPERIMENT_CONFIG_DIR / "base.yaml"

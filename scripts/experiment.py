@@ -40,19 +40,12 @@ def _setup_base_logger(config: Config):
   logger.addHandler(file_handler)
 
 
-def summary_model(config: Config):
-  from torchinfo import summary
-  model, _, _ = config.experiment.create_llm()
-  train_data = load_data(config.output_dir / f"idxs.{config.experiment.dataset_name}_train.npy")
-  train_loader = MyDataLoader(train_data, config.experiment.batch_size,
-                              config.experiment.model_params.context_length, device='cpu')
-  x, y = train_loader[0]
-  print(summary(model, input_data=x, verbose=0))
+
 
 
 def load_data(data_path: Path) -> np.ndarray:
   # TODO verify dtype based on tokenizer vocab size
-  data = np.memmap(data_path, dtype=np.int32, mode="r")
+  data = np.memmap(data_path, dtype=np.uint32, mode="r")
   return data
 
 
