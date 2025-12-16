@@ -7,6 +7,7 @@ from cs336_basics.tokenizer import BpeTokenizer
 from tests.test_tokenizer import get_tokenizer_from_vocab_merges_path
 
 import hydra
+from hydra.utils import to_absolute_path
 import logging
 import torch
 import numpy as np
@@ -14,7 +15,7 @@ import wandb
 from pathlib import Path
 
 from common import CONFIG_DIR, CHECKPOINT_FINAL_NAME
-from experiment_config import Config, ExperimentConfig
+from experiment_config import Config, EnvConfig, ExperimentConfig
 # %%
 
 
@@ -24,8 +25,8 @@ def _setup_base_logger(config: Config):
   formatter = logging.Formatter(log_format)
 
   # 初始化logger
-  logger = logging.getLogger(config.experiment.name)
-  logger.setLevel(logging.DEBUG)
+  logger = logging.getLogger()
+  logger.setLevel(config.log_level)
 
   # 控制台Handler
   console_handler = logging.StreamHandler()
@@ -33,6 +34,7 @@ def _setup_base_logger(config: Config):
   logger.addHandler(console_handler)
 
   # 文件Handler
+  config.log_file.parent.mkdir(parents=True, exist_ok=True)
   file_handler = logging.FileHandler(config.log_file, mode="a", encoding="utf-8")
   file_handler.setFormatter(formatter)
   logger.addHandler(file_handler)
@@ -41,7 +43,7 @@ def _setup_base_logger(config: Config):
 def summary_model(config: Config):
   from torchinfo import summary
   model, _, _ = config.experiment.create_llm()
-  train_data = load_data(config.output_dir / f"{config.experiment.dataset_name}_train.npy")
+  train_data = load_data(config.output_dir / f"idxs.{config.experiment.dataset_name}_train.npy")
   train_loader = MyDataLoader(train_data, config.experiment.batch_size,
                               config.experiment.model_params.context_length, device='cpu')
   x, y = train_loader[0]
@@ -151,13 +153,13 @@ def train(config: Config):
   device = 'cuda' if torch.cuda.is_available() else 'cpu'
   dataset_name = config.experiment.dataset_name
   train_loader = MyDataLoader(
-      load_data(config.output_dir / f"{dataset_name}_train.npy"),
+      load_data(config.output_dir / f"idxs.{dataset_name}_train.npy"),
       config.experiment.batch_size,
       config.experiment.model_params.context_length,
       device
   )
   val_loader = MyDataLoader(
-      load_data(config.output_dir / f"{dataset_name}_valid.npy"),
+      load_data(config.output_dir / f"idxs.{dataset_name}_valid.npy"),
       config.experiment.batch_size,
       config.experiment.model_params.context_length,
       device
@@ -207,7 +209,7 @@ def validate(config: Config, checkpoint_name: str | None = None):
 
   dataset_name = config.experiment.dataset_name
   val_loader = MyDataLoader(
-      load_data(config.output_dir / f"{dataset_name}_valid.npy"),
+      load_data(config.output_dir / f"idxs.{dataset_name}_valid.npy"),
       config.experiment.batch_size,
       config.experiment.model_params.context_length,
       device
@@ -252,7 +254,12 @@ def inference(input_str: str, config: Config, checkpoint_name: str | None, infer
 # %%
 @hydra.main(version_base=None, config_path=str(CONFIG_DIR), config_name="config")
 def main(cfg):
-  config = Config(**cfg)
+  workspace = Path(to_absolute_path(cfg.env.workspace))
+  env = EnvConfig(workspace=workspace)
+  kwargs = dict(cfg)
+  kwargs['env'] = env
+  config = Config(**kwargs)
+
   _setup_base_logger(config)
   train(config)
 

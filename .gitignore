@@ -167,6 +167,7 @@ cython_debug/
 /output
 /outputs
 /experiment
+/experiments
 /scripts/wandb
 /wandb
 *.pickle

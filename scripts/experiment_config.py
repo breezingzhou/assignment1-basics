@@ -1,4 +1,5 @@
 from dataclasses import asdict
+import logging
 from pydantic import BaseModel, field_serializer, field_validator
 from pydantic.dataclasses import dataclass
 from pathlib import Path
@@ -120,6 +121,7 @@ class Config(BaseModel):
   env: EnvConfig
   experiment: ExperimentConfig
   run_id: str | None = None
+  log_level: int = logging.DEBUG
 
   @property
   def output_dir(self) -> Path:
@@ -135,7 +137,7 @@ class Config(BaseModel):
 
   @property
   def experiment_dir(self) -> Path:
-    return self.env.workspace / self.experiment.name
+    return self.env.experiments_dir / self.experiment.name
 
   @property
   def checkpoint_dir(self) -> Path:

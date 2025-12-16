@@ -1,5 +1,7 @@
 defaults:
   - experiment: base
   - env: local
+  - _self_
 
 run_id: null
+log_level: 10  # DEBUG level

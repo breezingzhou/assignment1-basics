@@ -10,7 +10,7 @@ base_config = ExperimentConfig.load_config(BASE_EXPERIMENT_CONFIG_PATH)
 def experiment_lr(base_config: ExperimentConfig):
   base_config.schedule_params = None
 
-  for lr in [1e-3, 3e-3, 1e-4, 3e-4]:
+  for lr in [1e-3, 3e-3, 1e-4, 3e-4, 3e-5]:
     config = base_config
     config.optimizer_params.learning_rate = lr
     config.name = f"base_lr_{lr:.0e}"

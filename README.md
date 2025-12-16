@@ -48,3 +48,12 @@ gunzip owt_valid.txt.gz
 cd ..
 ```
 
+### run on remote
+``` sh
+export REMOTE_WORKSPACE='xxx'
+cat ~/.netrc
+wandb login <your-api-key>
+python ./scripts/experiment.py experiment=base_lr_1e-03
+or
+python ./scripts/experiment.py env=remote experiment=base_lr_1e-03 log_level=20 run_id="xxx"
+```
