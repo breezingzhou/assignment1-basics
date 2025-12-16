@@ -127,10 +127,12 @@ def train_model(
       # Save checkpoint periodically
       if epoch % config.experiment.save_every_n_epochs == 0 and epoch != 0:
         checkpoint_path = config.checkpoint_dir / f"checkpoint_iter_{epoch}.pt"
-        snapshot_path = config.snapshot_dir / f"snapshot_iter_{epoch}.pt"
         my_save_checkpoint(model, optimizer, epoch, checkpoint_path)
-        my_save_xy_snapshot(x, y, logits, snapshot_path)
         logging.info(f"Checkpoint saved at iteration {epoch}")
+      if config.experiment.snapshot_every_n_epochs > 0 and epoch % config.experiment.snapshot_every_n_epochs == 0 and epoch != 0:
+        snapshot_path = config.snapshot_dir / f"snapshot_iter_{epoch}.pt"
+        my_save_xy_snapshot(x, y, logits, snapshot_path)
+        logging.info(f"Snapshot saved at iteration {epoch}")
 
   # Final checkpoint
   my_save_checkpoint(model, optimizer, config.experiment.train_epochs,

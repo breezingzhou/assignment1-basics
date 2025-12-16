@@ -59,6 +59,7 @@ class ExperimentConfig(BaseModel):
   dataset_name: str
   name: str
   save_every_n_epochs: int
+  snapshot_every_n_epochs: int = 0
   train_start_epoch: int = 0
 
   @classmethod
