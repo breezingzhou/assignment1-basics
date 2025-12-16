@@ -19,7 +19,7 @@ optimizer_params:
   eps: 1.0e-08
   learning_rate: 0.0003
   weight_decay: 0.01
-save_every_n_epochs: 1000
+save_every_n_epochs: 250
 schedule_params: null
-train_epochs: 40000
+train_epochs: 5000
 train_start_epoch: 0
