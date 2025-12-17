@@ -13,7 +13,7 @@ base_config = ExperimentConfig.load_config(BASE_EXPERIMENT_CONFIG_PATH)
 
 def summary_model(config: ExperimentConfig):
   from torchinfo import summary
-  model, _, _ = config.create_llm()
+  model, _, _ = config.create_llm(compile=False)
   data_path = OUTPUT_DIR / f"idxs.{config.dataset_name}_train.npy"
   train_data = np.memmap(data_path, dtype=np.uint32, mode="r")
   train_loader = MyDataLoader(train_data, config.batch_size,

@@ -1,6 +1,8 @@
+from collections.abc import Callable
 import logging
 from pydantic import BaseModel, field_serializer, field_validator
 from pathlib import Path
+import torch
 import yaml
 from cs336_basics.model import MyTransformerLM
 from cs336_basics.optimizer import MyAdamW, MyCosineAnnealingLR
@@ -73,7 +75,7 @@ class ExperimentConfig(BaseModel):
     with open(path, 'w') as f:
       yaml.dump(self.model_dump(), f)
 
-  def create_llm(self) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
+  def create_llm(self, compile: bool = True) -> tuple[MyTransformerLM, MyAdamW, MyCosineAnnealingLR | None]:
     model = MyTransformerLM(
         vocab_size=self.model_params.vocab_size,
         context_length=self.model_params.context_length,
@@ -96,6 +98,8 @@ class ExperimentConfig(BaseModel):
         cosine_cycle_iters=self.schedule_params.cosine_cycle_iters,
         min_lr=self.optimizer_params.learning_rate * self.schedule_params.min_lr_coeff
     ) if self.schedule_params else None
+    if compile:
+      model.compile(dynamic=True)
     return model, optimizer, sechdule
 
 
