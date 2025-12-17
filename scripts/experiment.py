@@ -82,7 +82,8 @@ def train_prepare(config: Config, model: MyTransformerLM, optimizer: MyAdamW, se
 
 
 # %%
-
+def _trigger(epoch: int, every_n: int) -> bool:
+  return every_n > 0 and epoch % every_n == 0 and epoch != 0
 
 def train_model(
     model: MyTransformerLM,
@@ -125,11 +126,11 @@ def train_model(
       }, step=epoch)
 
       # Save checkpoint periodically
-      if epoch % config.experiment.save_every_n_epochs == 0 and epoch != 0:
+      if _trigger(epoch, config.experiment.save_every_n_epochs):
         checkpoint_path = config.checkpoint_dir / f"checkpoint_iter_{epoch}.pt"
         my_save_checkpoint(model, optimizer, epoch, checkpoint_path)
         logging.info(f"Checkpoint saved at iteration {epoch}")
-      if config.experiment.snapshot_every_n_epochs > 0 and epoch % config.experiment.snapshot_every_n_epochs == 0 and epoch != 0:
+      if _trigger(epoch, config.experiment.snapshot_every_n_epochs):
         snapshot_path = config.snapshot_dir / f"snapshot_iter_{epoch}.pt"
         my_save_xy_snapshot(x, y, logits, snapshot_path)
         logging.info(f"Snapshot saved at iteration {epoch}")

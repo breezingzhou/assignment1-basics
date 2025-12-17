@@ -28,7 +28,7 @@ def summary_model(config: ExperimentConfig):
 def experiment_lr(base_config: ExperimentConfig):
   base_config.schedule_params = None
 
-  for lr in [1e-3, 3e-3, 1e-4, 3e-4, 3e-5]:
+  for lr in [1e-3, 3e-3, 1e-4, 3e-4]:
     config = deepcopy(base_config)
     config.optimizer_params.learning_rate = lr
     config.name = f"base_lr_{lr:.0e}"
@@ -41,12 +41,11 @@ def experiment_lr(base_config: ExperimentConfig):
 def experiment_batch_size(base_config: ExperimentConfig):
   base_config.schedule_params = None
 
-  for batch_size_coef in [1, 2, 4, 8]:
+  for batch_size_coef in [2, 4, 8]:
     config = deepcopy(base_config)
     config.batch_size = base_config.batch_size * batch_size_coef
     config.train_epochs = base_config.train_epochs // batch_size_coef
     config.name = f"base_bs_{config.batch_size}"
-    config.save_every_n_epochs = max(1, base_config.save_every_n_epochs * 2 // batch_size_coef)
     config_path = EXPERIMENT_CONFIG_DIR / f"base_bs_{config.batch_size}.yaml"
     config.save_config(config_path)
 
@@ -58,4 +57,4 @@ def experiment_batch_size(base_config: ExperimentConfig):
 
 # %%
 # experiment_lr(base_config)
-experiment_batch_size(base_config)
+# experiment_batch_size(base_config)
